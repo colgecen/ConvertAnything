@@ -14,7 +14,8 @@ dönüştürme uygulaması. Dağıtım: **AppImage** (~10-20 MB). Dönüşüm mo
 | Belge | docx, odt, md, html, epub, txt, csv → pdf dahil |
 | Arşiv | herhangi bir dosya → zip/tar.gz; zip/tar.gz → ayıklama |
 
-- Sürükle-bırak ve çoklu dosya
+- Sürükle-bırak ve çoklu dosya; tek ekranda karışık türler
+- Toplu dönüşüm: hedef biçim listesi tüm dosyaların ortak desteklediği biçimlerden oluşur
 - Tokio tabanlı paralel iş kuyruğu, canlı ilerleme
 - Çakışmada `-1`, `-2` ekleyerek **üzerine yazmama**
 - JPEG kalitesi, ses/video bit hızı ve çözünürlük seçenekleri

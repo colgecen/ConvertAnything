@@ -18,9 +18,9 @@ src/
 ├── main.rs            # Giriş noktası, eframe başlatma
 ├── app.rs             # Uygulama durumu (egui App trait)
 ├── ui/
-│   ├── mod.rs         # Ana pencere, sekme yönlendirme
+│   ├── mod.rs         # Ana pencere, ekran yönlendirme
 │   ├── setup_wizard.rs# İlk kurulum sihirbazı
-│   ├── convert_view.rs# Sürükle-bırak + format seçimi + ilerleme
+│   ├── convert_view.rs# Tek ekran: dosya listesi + ortak hedef + ilerleme
 │   └── settings.rs    # Ayarlar
 ├── core/
 │   ├── detector.rs    # tool_exists(), paket yöneticisi tespiti
@@ -53,11 +53,11 @@ scripts/               # AppImage paketleme betiği
    - `pkexec dnf install -y ffmpeg` veya `pkexec pacman -S --noconfirm ffmpeg`
    - Paket adları dağıtıma göre haritalanır (bkz. installer.rs)
 4. Başarılıysa `~/.config/donustur/config.toml` içine `setup_done = true` yazılır
-5. Sonraki açılışlarda sadece sessiz `tool_exists()` kontrolü; eksik araçla ilişkili sekmeler kilitlenir
+5. Sonraki açılışlarda sadece sessiz `tool_exists()` kontrolü; eksik araç gerektiren hedefler hedef listesinden çıkarılır
 
 ### Dönüşüm
-1. Kullanıcı dosyaları sürükler → `registry.rs` kaynak formatı tanır
-2. Hedef format seçilir → destek matrisinden ve kurulu araçlardan doğrulanır
+1. Kullanıcı bir veya çok dosyayı (karışık türler dahil) sürükler → `registry.rs` kaynak formatı tanır
+2. Hedef format, tüm dosyaların desteklediği biçimlerin kesişiminden seçilir ve kurulu araçlarla doğrulanır
 3. `job.rs` kuyruğa iş ekler; tokio semaforu ile sınırlı paralellikte çalışır
 4. İlgili converter harici aracı `util/process.rs` üzerinden kabuksuz çağırır
 5. İlerleme stderr/`-progress` parse ile güncellenir; sonuç bildirimi gösterilir
@@ -68,5 +68,5 @@ scripts/               # AppImage paketleme betiği
 ## Kritik ilkeler
 - **Araçlar asla gömülmez** — Command ile çağrılır; AppImage 10-20 MB kalır
 - **Kurulum idempotent** — zaten kuruluysa tekrar kurulmaz
-- **Opsiyonel araçlar uygulamayı bloklamaz** — yoksa o sekmeler devre dışı
+- **Opsiyonel araçlar uygulamayı bloklamaz** — yoksa o araca bağlı hedefler listelenmez
 - **Flatpak desteklenmez** (sistem paketlerine erişim engeli); dağıtım yalnız AppImage

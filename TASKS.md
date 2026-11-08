@@ -39,6 +39,14 @@
 - [x] .desktop dosyası + ikon
 - [x] GitHub Release CI (x86_64)
 
+## Milestone 7 — Tek ekran toplu dönüşüm (UI yenileme) — TAMAM
+- [x] Sekme bazlı dönüşüm ekranlarını kaldır; tek dosya listesi
+- [x] Karışık türlerde ortak hedef biçim (kümelerin kesişimi) hesabı
+- [x] Sürükle-bırak ile her türden çoklu dosya ekleme
+- [x] Kart tabanlı görünüm, tür rozetleri, canlı durum renkleri
+- [x] Seçeneklerin yalnızca ilgili türlerde gösterilmesi
+- [x] Ayarlar ekranına başlıktan erişim
+
 ## Güvenlik denetimi (her milestone sonu)
 - [x] SECURITY.md kontrol listesi gözden geçirilir
 - [x] cargo audit (CI: rustsec/audit-check)
@@ -52,7 +60,8 @@
 - M4: Belge hedefleri araç kurulumuna göre filtrelenir; TXT/CSV bellekte UTF-8'e çevrilir (256 MiB sınırı).
 - M5: Zip bomb (oran + toplam boyut + girdi sayısı), path traversal ve symlink girdileri reddedilir.
 - M6: `scripts/package-appimage.sh` üretimi 4.6 MB AppImage olarak doğrulandı (hedef 10-20 MB'ın altında).
-- Test: 89 birim/uçtan uca test; `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
+- M7: Tek ekranda karışık dosyalar; hedef listesi tüm dosyaların desteklediği biçimlerin kesişimidir. Arşive paketleme/ayıklama medya araçları gerektirmez.
+- Test: 94 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
 
 ## V2 fikirleri (şimdilik yapma)
 - Toplu önizleme, format öneri motoru, sağ tık menüsü entegrasyonu (Nautilus/Dolphin), arşiv desteği genişletme
