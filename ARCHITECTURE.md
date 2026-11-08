@@ -1,0 +1,65 @@
+# MİMARİ
+
+## Teknik yığın
+| Katman | Seçim | Neden |
+|---|---|---|
+| Dil | Rust (stable) | Boyut, hız, güvenlik |
+| GUI | egui/eframe (winit) | Tek binary, native Wayland, küçük |
+| Async | tokio | Dönüşüm işlerini bloklamadan yürütmek |
+| Video/Ses | FFmpeg (harici binary) | Standart; sıfırdan codec yazılmaz |
+| Belge | LibreOffice headless + pandoc (harici) | docx/odt/pdf dönüşüm standardı |
+| Görsel | image crate | jpg/png/webp/bmp/tiff/gif |
+| Yapılandırma | serde + toml | ~/.config/donustur/config.toml |
+| Log | tracing | Hata ayıklama ve kullanıcı raporları |
+
+## Modül yapısı
+```
+src/
+├── main.rs            # Giriş noktası, eframe başlatma
+├── app.rs             # Uygulama durumu (egui App trait)
+├── ui/
+│   ├── mod.rs         # Ana pencere, sekme yönlendirme
+│   ├── setup_wizard.rs# İlk kurulum sihirbazı
+│   ├── convert_view.rs# Sürükle-bırak + format seçimi + ilerleme
+│   └── settings.rs    # Ayarlar
+├── core/
+│   ├── detector.rs    # tool_exists(), paket yöneticisi tespiti
+│   ├── installer.rs   # pkexec + dnf/pacman kurulumu
+│   ├── registry.rs    # Format tanımı ve destek matrisi
+│   └── job.rs         # Dönüşüm işi modeli (kuyruk)
+├── converters/
+│   ├── image.rs       # image crate
+│   ├── av.rs          # FFmpeg çağrıları
+│   ├── document.rs    # soffice/pandoc çağrıları
+│   └── archive.rs     # 7z/zip (opsiyonel)
+├── state/
+│   └── config.rs      # config.toml okuma/yazma, setup_done bayrağı
+└── util/
+    └── paths.rs       # XDG dizinleri, geçici dosya yönetimi
+```
+
+## Akışlar
+
+### İlk açılış (kurulum sihirbazı)
+1. `detector.rs`: ffmpeg / soffice / pandoc varlık kontrolü
+2. Eksikler listelenir; kullanıcı [Kur] / [Atla] seçer
+3. [Kur] → `installer.rs`:
+   - `detect_pkg_manager()`: `/usr/bin/dnf|dnf5` → Dnf, `/usr/bin/pacman` → Pacman
+   - `pkexec dnf install -y ffmpeg` veya `pkexec pacman -S --noconfirm ffmpeg`
+   - Paket adları dağıtıma göre haritalanır (bkz. installer.rs)
+4. Başarılıysa `~/.config/donustur/config.toml` içine `setup_done = true` yazılır
+5. Sonraki açılışlarda sadece sessiz `tool_exists()` kontrolü; eksik araçla ilişkili sekmeler kilitlenir
+
+### Dönüşüm
+1. Kullanıcı dosyaları sürükler → `registry.rs` kaynak formatı tanır
+2. Hedef format seçilir → destek matrisinden doğrulanır
+3. `job.rs` kuyruğa iş ekler; tokio ile paralel çalışır
+4. İlgili converter harici aracı `Command` ile çağırır
+5. İlerleme stderr parse ile güncellenir; sonuç bildirimi gösterilir
+6. Geçici dosyalar `~/.cache/donustur/tmp` altında, iş bitince silinir
+
+## Kritik ilkeler
+- **Araçlar asla gömülmez** — Command ile çağrılır; AppImage 10-20 MB kalır
+- **Kurulum idempotent** — zaten kuruluysa tekrar kurulmaz
+- **Opsiyonel araçlar uygulamayı bloklamaz** — yoksa o sekmeler devre dışı
+- **Flatpak desteklenmez** (sistem paketlerine erişim engeli); dağıtım yalnız AppImage
