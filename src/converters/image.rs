@@ -28,10 +28,12 @@ pub async fn convert(
 
     tokio::task::spawn_blocking(move || -> Result<()> {
         report(&progress, 5);
-        let reader = image::ImageReader::open(&input)
+        let mut reader = image::ImageReader::open(&input)
             .with_context(|| format!("görsel açılamadı: {}", input.display()))?
             .with_guessed_format()
             .context("görsel biçimi algılanamadı")?;
+        // Decompression-bomb guard: bound dimensions and total allocation.
+        reader.limits(decode_limits());
         let image = reader
             .decode()
             .with_context(|| format!("görsel çözümlenemedi: {}", input.display()))?;
@@ -45,6 +47,15 @@ pub async fn convert(
     .context("görsel dönüşüm görevi çöktü")??;
 
     Ok(())
+}
+
+/// Decoder limits sized for desktop use, not for gigantic satellite imagery.
+fn decode_limits() -> image::Limits {
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(30_000);
+    limits.max_image_height = Some(30_000);
+    limits.max_alloc = Some(1024 * 1024 * 1024);
+    limits
 }
 
 fn write_image(image: &DynamicImage, output: &Path, target: &str, quality: u8) -> Result<()> {
@@ -125,6 +136,25 @@ mod tests {
         assert_eq!(max.load(Ordering::SeqCst), 100);
         let decoded = image::open(&output).unwrap();
         assert_eq!(decoded.dimensions(), (8, 8));
+    }
+
+    #[tokio::test]
+    async fn converts_png_to_every_supported_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("kaynak.png");
+        sample_png(&input);
+        for target in ["jpg", "webp", "bmp", "tiff", "gif", "ico"] {
+            let output = dir.path().join(format!("cikti.{target}"));
+            let (progress, _) = progress_counter();
+            convert(&input, &output, target, 85, progress)
+                .await
+                .unwrap_or_else(|error| panic!("{target} dönüşümü başarısız: {error:#}"));
+            let meta = std::fs::metadata(&output).unwrap();
+            assert!(meta.len() > 32, "{target} çıktısı çok küçük");
+            let decoded = image::open(&output)
+                .unwrap_or_else(|error| panic!("{target} çıktısı okunamadı: {error}"));
+            assert_eq!(decoded.dimensions(), (8, 8), "{target} boyutu yanlış");
+        }
     }
 
     #[tokio::test]

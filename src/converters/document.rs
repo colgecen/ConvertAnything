@@ -51,14 +51,26 @@ pub async fn convert(request: &ConvertRequest, progress: ProgressFn) -> Result<(
     Ok(())
 }
 
+/// Encoding detection needs the whole file in memory, so text conversion has
+/// a stricter cap than the general file size limit.
+const MAX_TEXT_BYTES: u64 = 256 * 1024 * 1024;
+
 /// Converts TXT/CSV from a legacy encoding to UTF-8.
 async fn encoding_to_utf8(request: &ConvertRequest, progress: ProgressFn) -> Result<()> {
     let input = request.input.clone();
     let output = request.output.clone();
-    let max_size = request.options.max_file_size;
+    let max_size = request.options.max_file_size.min(MAX_TEXT_BYTES);
 
     tokio::task::spawn_blocking(move || {
         report(&progress, 10);
+        let meta = std::fs::metadata(&input)
+            .with_context(|| format!("metin dosyası okunamadı: {}", input.display()))?;
+        if meta.len() > max_size {
+            bail!(
+                "metin dosyası {} MiB sınırını aşıyor; kodlama dönüşümü bellekte yapılır",
+                max_size / (1024 * 1024)
+            );
+        }
         let bytes = std::fs::read(&input)
             .with_context(|| format!("metin dosyası okunamadı: {}", input.display()))?;
         if bytes.len() as u64 > max_size {
@@ -122,27 +134,21 @@ async fn libreoffice_convert(request: &ConvertRequest, progress: ProgressFn) -> 
         .tempdir()
         .context("geçici çıktı dizini oluşturulamadı")?;
 
-    let profile_uri = path_to_file_uri(profile.path());
-    let args = vec![
-        "--headless".to_string(),
-        "--norestore".to_string(),
-        "--invisible".to_string(),
-        "--nologo".to_string(),
-        "--nodefault".to_string(),
-        "--nolockcheck".to_string(),
-        format!("-env:UserInstallation={profile_uri}"),
-        "--convert-to".to_string(),
-        filter.to_string(),
-        "--outdir".to_string(),
-        outdir.path().to_string_lossy().to_string(),
-        input.to_string_lossy().to_string(),
-    ];
+    let args = soffice_args(&input, outdir.path(), profile.path(), filter);
 
     report(&progress, 10);
     let timeout = request.options.timeout;
     let mut cmd = tokio::process::Command::new(soffice);
     cmd.args(&args);
-    let result = process::run_captured(cmd, timeout, Some(profile.path()), None).await?;
+    let workdir = process::sandbox_workdir();
+    let result = process::run_captured(
+        cmd,
+        timeout,
+        Some(profile.path()),
+        Some(workdir.as_path()),
+        None,
+    )
+    .await?;
     if result.timed_out {
         bail!("LibreOffice zaman sınırını aştı ve öldürüldü");
     }
@@ -164,6 +170,38 @@ async fn libreoffice_convert(request: &ConvertRequest, progress: ProgressFn) -> 
         .with_context(|| format!("çıktı taşınamadı: {}", output.display()))?;
     report(&progress, 100);
     Ok(())
+}
+
+/// Builds the LibreOffice headless command line. Pure, hence unit tested.
+fn soffice_args(input: &Path, outdir: &Path, profile: &Path, filter: &str) -> Vec<String> {
+    let profile_uri = path_to_file_uri(profile);
+    vec![
+        "--headless".to_string(),
+        "--norestore".to_string(),
+        "--invisible".to_string(),
+        "--nologo".to_string(),
+        "--nodefault".to_string(),
+        "--nolockcheck".to_string(),
+        format!("-env:UserInstallation={profile_uri}"),
+        "--convert-to".to_string(),
+        filter.to_string(),
+        "--outdir".to_string(),
+        outdir.to_string_lossy().to_string(),
+        input.to_string_lossy().to_string(),
+    ]
+}
+
+/// Builds the Pandoc command line. Pure, hence unit tested.
+fn pandoc_args(input: &Path, output: &Path, target_id: &str) -> Vec<String> {
+    let mut args = vec![
+        input.to_string_lossy().to_string(),
+        "-o".to_string(),
+        output.to_string_lossy().to_string(),
+    ];
+    if target_id == "html" {
+        args.push("--standalone".to_string());
+    }
+    args
 }
 
 fn librefilter(target_id: &str) -> Result<&'static str> {
@@ -211,19 +249,20 @@ async fn pandoc_convert(request: &ConvertRequest, progress: ProgressFn) -> Resul
             .context("çıktı dizini oluşturulamadı")?;
     }
 
-    let mut args = vec![
-        input.to_string_lossy().to_string(),
-        "-o".to_string(),
-        output.to_string_lossy().to_string(),
-    ];
-    if request.target_id == "html" {
-        args.push("--standalone".to_string());
-    }
+    let args = pandoc_args(&input, &output, &request.target_id);
 
     report(&progress, 10);
     let mut cmd = tokio::process::Command::new(pandoc);
     cmd.args(&args);
-    let result = process::run_captured(cmd, request.options.timeout, None, None).await?;
+    let workdir = process::sandbox_workdir();
+    let result = process::run_captured(
+        cmd,
+        request.options.timeout,
+        None,
+        Some(workdir.as_path()),
+        None,
+    )
+    .await?;
     if result.timed_out {
         bail!("Pandoc zaman sınırını aştı ve öldürüldü");
     }
@@ -309,6 +348,38 @@ mod tests {
         assert!(librefilter("exe").is_err());
     }
 
+    #[test]
+    fn soffice_args_use_absolute_paths_and_fixed_filter() {
+        let args = soffice_args(
+            Path::new("/tmp/girdi.docx"),
+            Path::new("/tmp/cikti"),
+            Path::new("/tmp/profil"),
+            "pdf:writer_pdf_Export",
+        );
+        assert!(args.iter().any(|a| a == "--headless"));
+        assert!(args
+            .iter()
+            .any(|a| a.starts_with("-env:UserInstallation=file://")));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--convert-to" && w[1] == "pdf:writer_pdf_Export"));
+        assert!(args
+            .windows(2)
+            .any(|w| { w[0] == "--outdir" && w[1] == "/tmp/cikti" }));
+        assert_eq!(args.last().unwrap(), "/tmp/girdi.docx");
+        assert!(!args.iter().any(|a| a.contains(';')));
+    }
+
+    #[test]
+    fn pandoc_args_add_standalone_only_for_html() {
+        let html = pandoc_args(Path::new("/tmp/a.md"), Path::new("/tmp/a.html"), "html");
+        assert!(html.contains(&"--standalone".to_string()));
+        let docx = pandoc_args(Path::new("/tmp/a.md"), Path::new("/tmp/a.docx"), "docx");
+        assert!(!docx.contains(&"--standalone".to_string()));
+        assert_eq!(docx[1], "-o");
+        assert_eq!(docx[2], "/tmp/a.docx");
+    }
+
     #[tokio::test]
     async fn converts_windows_1254_to_utf8() {
         let dir = tempfile::tempdir().unwrap();
@@ -323,6 +394,39 @@ mod tests {
 
         let text = std::fs::read_to_string(&output).unwrap();
         assert_eq!(text, "Türkçe ışık: ğüşiöç");
+    }
+
+    /// End-to-end LibreOffice check; slow, so opt-in with `--ignored`.
+    #[tokio::test]
+    #[ignore = "LibreOffice gerektirir ve yavaştır"]
+    async fn real_libreoffice_converts_docx_to_pdf() {
+        let Some(soffice) = crate::core::detector::find_binary("soffice") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("ornek.docx");
+        let output = dir.path().join("ornek.pdf");
+
+        // Use LibreOffice itself to produce the fixture, so the test only needs
+        // the same dependency as the conversion under test.
+        std::fs::write(dir.path().join("ornek.txt"), "Başlık\n\nMerhaba dünya.\n").unwrap();
+        let generated = tokio::process::Command::new(&soffice)
+            .args(["--headless", "--convert-to", "docx", "--outdir"])
+            .arg(dir.path())
+            .arg(dir.path().join("ornek.txt"))
+            .output()
+            .await
+            .expect("soffice başlatılamadı");
+        assert!(
+            generated.status.success() && input.exists(),
+            "docx fixture üretilemedi: {}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+
+        let source = crate::core::registry::format_by_id("docx").unwrap();
+        let request = request(input, output.clone(), source, "pdf");
+        convert(&request, noop()).await.unwrap();
+        assert!(std::fs::metadata(&output).unwrap().len() > 1024);
     }
 
     #[tokio::test]

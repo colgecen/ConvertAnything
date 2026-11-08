@@ -257,7 +257,17 @@ impl DonusturApp {
                 .and_then(|s| s.to_str())
                 .unwrap_or("cikti")
                 .to_string();
-            let output = if target == registry::EXTRACT {
+            // Extraction always gets a fresh directory; files only overwrite
+            // when the user explicitly enabled it in Settings.
+            let overwrite = self.config.allow_overwrite && target != registry::EXTRACT;
+            let output = if overwrite {
+                let ext = if target == registry::EXTRACT {
+                    ""
+                } else {
+                    &target
+                };
+                paths::explicit_output_path(&out_dir, &stem, ext, &mut taken)
+            } else if target == registry::EXTRACT {
                 paths::unique_output_path_reserved(&out_dir, &stem, "", &mut taken)
             } else {
                 paths::unique_output_path_reserved(&out_dir, &stem, &target, &mut taken)
@@ -273,6 +283,7 @@ impl DonusturApp {
                 file.format,
                 target.clone(),
                 options.clone(),
+                overwrite,
             );
             self.jobs.push(JobRow {
                 id,

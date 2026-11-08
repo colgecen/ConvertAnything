@@ -96,6 +96,9 @@ pub async fn install(
     let mut cmd = Command::new("pkexec");
     cmd.args(&args)
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
+        .env_remove("LD_PRELOAD")
+        .env_remove("LD_LIBRARY_PATH")
+        .env_remove("LD_AUDIT")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

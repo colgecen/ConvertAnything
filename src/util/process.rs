@@ -95,6 +95,19 @@ pub fn validate_input_file(path: &Path, max_size: u64) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+/// Directory used as the working directory for every external tool.
+///
+/// All paths passed to tools are absolute, so the working directory only needs
+/// to be benign. `~/.cache/donustur/tmp` is used when available.
+pub fn sandbox_workdir() -> PathBuf {
+    let dir = crate::util::paths::tmp_dir();
+    if std::fs::create_dir_all(&dir).is_ok() {
+        dir
+    } else {
+        std::env::temp_dir()
+    }
+}
+
 /// Checks that a directory has at least `needed` bytes free.
 pub fn ensure_free_space(dir: &Path, needed: u64) -> Result<()> {
     use fs2::available_space;
@@ -118,9 +131,13 @@ pub async fn run_captured(
     mut cmd: Command,
     timeout: Duration,
     home: Option<&Path>,
+    workdir: Option<&Path>,
     on_line: Option<LineHandler>,
 ) -> Result<ProcessOutput> {
     apply_minimal_env(&mut cmd, home);
+    if let Some(workdir) = workdir {
+        cmd.current_dir(workdir);
+    }
     let mut child = cmd.spawn().context("harici araç başlatılamadı")?;
 
     let stderr = child
@@ -184,7 +201,7 @@ pub async fn run_program(
 ) -> Result<ProcessOutput> {
     let mut cmd = Command::new(program);
     cmd.args(args);
-    run_captured(cmd, timeout, home, on_line).await
+    run_captured(cmd, timeout, home, None, on_line).await
 }
 
 fn push_tail(buffer: &mut String, line: &str) {
@@ -199,25 +216,27 @@ fn push_tail(buffer: &mut String, line: &str) {
     }
 }
 
-/// Moves an intermediate file to its final path without overwriting.
+/// Moves an intermediate file to its final path.
 ///
-/// `std::fs::rename` would silently replace an existing file, so the caller
-/// must pass a path produced by [`crate::util::paths::unique_output_path`].
-pub async fn finalise_output(temp: &Path, final_path: &Path) -> Result<()> {
-    // Reserve the destination name with create_new so a concurrent process can
-    // never be overwritten between the existence check and the rename.
-    let reservation = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(final_path)
-        .await
-        .with_context(|| {
-            format!(
-                "hedef dosya zaten var veya oluşturulamadı: {}",
-                final_path.display()
-            )
-        })?;
-    drop(reservation);
+/// Unless `overwrite` is explicitly enabled by the user, the destination name
+/// is reserved with `create_new` so an existing file can never be replaced.
+pub async fn finalise_output(temp: &Path, final_path: &Path, overwrite: bool) -> Result<()> {
+    if !overwrite {
+        // Reserve the destination name with create_new so a concurrent process
+        // can never be overwritten between the existence check and the rename.
+        let reservation = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(final_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "hedef dosya zaten var veya oluşturulamadı: {}",
+                    final_path.display()
+                )
+            })?;
+        drop(reservation);
+    }
 
     match tokio::fs::rename(temp, final_path).await {
         Ok(()) => Ok(()),
@@ -229,7 +248,9 @@ pub async fn finalise_output(temp: &Path, final_path: &Path) -> Result<()> {
                     Ok(())
                 }
                 Err(error) => {
-                    let _ = tokio::fs::remove_file(final_path).await;
+                    if !overwrite {
+                        let _ = tokio::fs::remove_file(final_path).await;
+                    }
                     Err(error)
                         .with_context(|| format!("çıktı taşınamadı: {}", final_path.display()))
                 }
@@ -273,6 +294,44 @@ mod tests {
         f.write_all(&[b'a'; 64]).unwrap();
         assert!(validate_input_file(&big, 32).is_err());
         assert!(validate_input_file(&big, 1024).is_ok());
+    }
+
+    #[tokio::test]
+    async fn finalise_never_overwrites_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp = dir.path().join("gecici.txt");
+        let final_path = dir.path().join("hedef.txt");
+        std::fs::write(&temp, b"yeni").unwrap();
+        std::fs::write(&final_path, b"eski").unwrap();
+
+        let result = finalise_output(&temp, &final_path, false).await;
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&final_path).unwrap(), b"eski");
+        assert!(temp.exists());
+    }
+
+    #[tokio::test]
+    async fn finalise_moves_temp_into_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp = dir.path().join("gecici.txt");
+        let final_path = dir.path().join("hedef.txt");
+        std::fs::write(&temp, b"yeni").unwrap();
+
+        finalise_output(&temp, &final_path, false).await.unwrap();
+        assert_eq!(std::fs::read(&final_path).unwrap(), b"yeni");
+        assert!(!temp.exists());
+    }
+
+    #[tokio::test]
+    async fn finalise_overwrites_only_when_allowed() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp = dir.path().join("gecici.txt");
+        let final_path = dir.path().join("hedef.txt");
+        std::fs::write(&temp, b"yeni").unwrap();
+        std::fs::write(&final_path, b"eski").unwrap();
+
+        finalise_output(&temp, &final_path, true).await.unwrap();
+        assert_eq!(std::fs::read(&final_path).unwrap(), b"yeni");
     }
 
     #[tokio::test]

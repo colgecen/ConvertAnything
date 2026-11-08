@@ -457,6 +457,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn plain_tar_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("q.txt");
+        std::fs::write(&input, b"duz tar").unwrap();
+        let archive = dir.path().join("q.tar");
+        let target = crate::core::registry::format_by_id("tar").unwrap();
+        create(
+            &input,
+            &archive,
+            target,
+            &options(ArchiveLimits::default()),
+            noop(),
+        )
+        .await
+        .unwrap();
+        let out = dir.path().join("cikti");
+        extract(
+            &archive,
+            &out,
+            target,
+            &options(ArchiveLimits::default()),
+            noop(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(std::fs::read(out.join("q.txt")).unwrap(), b"duz tar");
+    }
+
+    #[tokio::test]
+    async fn tar_symlink_entry_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let archive_path = dir.path().join("link.tar");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut builder = tar::Builder::new(file);
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mode(0o777);
+            header.set_cksum();
+            builder
+                .append_link(&mut header, "kisa", "/etc/passwd")
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        let out = dir.path().join("cikti");
+        let tar_fmt = crate::core::registry::format_by_id("tar").unwrap();
+        let result = extract(
+            &archive_path,
+            &out,
+            tar_fmt,
+            &options(ArchiveLimits::default()),
+            noop(),
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(!out.exists());
+    }
+
+    #[tokio::test]
     async fn zip_bomb_ratio_is_rejected_and_cleaned_up() {
         let dir = tempfile::tempdir().unwrap();
         let input = dir.path().join("sifir.bin");

@@ -4,8 +4,9 @@
 //! shell), the environment is sanitised by [`crate::util::process`], progress
 //! is parsed from `-progress pipe:2`, and the job is killed on timeout.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
@@ -13,6 +14,46 @@ use anyhow::{bail, Context, Result};
 use crate::converters::{report, ConvertRequest, ProgressFn};
 use crate::core::detector;
 use crate::util::process;
+
+/// Oldest FFmpeg major version accepted (see SECURITY.md §6).
+pub const MIN_FFMPEG_MAJOR: u32 = 4;
+
+/// Extracts the major version from an `ffmpeg -version` banner.
+///
+/// Accepts both `ffmpeg version 7.1.1` and git snapshots such as
+/// `ffmpeg version n6.0-...`.
+pub fn parse_ffmpeg_major(banner: &str) -> Option<u32> {
+    let line = banner
+        .lines()
+        .find(|line| line.trim_start().starts_with("ffmpeg version"))?;
+    let token = line.split_whitespace().nth(2)?;
+    let digits: String = token
+        .trim_start_matches('n')
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    digits.parse().ok()
+}
+
+/// Verifies the installed FFmpeg is recent enough. Result is cached.
+fn ensure_ffmpeg_supported(ffmpeg: &Path) -> Result<()> {
+    static CHECK: OnceLock<Result<(), String>> = OnceLock::new();
+    let cached = CHECK.get_or_init(|| {
+        let output = std::process::Command::new(ffmpeg)
+            .arg("-version")
+            .output()
+            .map_err(|error| format!("FFmpeg sürümü okunamadı: {error}"))?;
+        let banner = String::from_utf8_lossy(&output.stdout).into_owned();
+        match parse_ffmpeg_major(&banner) {
+            Some(major) if major >= MIN_FFMPEG_MAJOR => Ok(()),
+            Some(major) => Err(format!(
+                "FFmpeg sürümü çok eski (ana sürüm {major}, en az {MIN_FFMPEG_MAJOR} gerekli)"
+            )),
+            None => Err("FFmpeg sürüm bilgisi çözümlenemedi".to_string()),
+        }
+    });
+    cached.clone().map_err(anyhow::Error::msg)
+}
 
 /// Parses `HH:MM:SS.mmm` (or `MM:SS.mmm`) into seconds.
 pub fn parse_timestamp(value: &str) -> Option<f64> {
@@ -59,6 +100,78 @@ fn safe_scale(scale: &str) -> Option<String> {
     }
 }
 
+/// Set of encoders reported by `ffmpeg -encoders`, probed once per process.
+///
+/// Fedora's `ffmpeg-free` has no `libx264`, so the H.264 encoder must be chosen
+/// at runtime instead of being hard-coded.
+fn available_encoders() -> &'static HashSet<String> {
+    static CACHE: OnceLock<HashSet<String>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let Ok(output) = std::process::Command::new("ffmpeg")
+            .args(["-hide_banner", "-encoders"])
+            .output()
+        else {
+            return HashSet::new();
+        };
+        parse_encoder_list(&String::from_utf8_lossy(&output.stdout))
+    })
+}
+
+/// Parses the `ffmpeg -encoders` table into a set of encoder names.
+fn parse_encoder_list(text: &str) -> HashSet<String> {
+    let mut set = HashSet::new();
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(flags) = parts.next() else { continue };
+        // Encoder rows start with a six-character flag column such as `V....D`.
+        if flags.len() != 6 || !flags.chars().all(|c| c.is_ascii_uppercase() || c == '.') {
+            continue;
+        }
+        if let Some(name) = parts.next() {
+            // Section header rows look like `V..... = Video`.
+            if name != "=" {
+                set.insert(name.to_string());
+            }
+        }
+    }
+    set
+}
+
+/// Chooses the best available H.264 encoder.
+fn h264_encoder() -> Option<&'static str> {
+    let encoders = available_encoders();
+    if encoders.contains("libx264") {
+        Some("libx264")
+    } else if encoders.contains("libopenh264") {
+        Some("libopenh264")
+    } else {
+        None
+    }
+}
+
+/// Appends H.264 encoder options, degrading gracefully.
+fn push_h264_args(args: &mut Vec<String>, bitrate: &Option<String>) {
+    match h264_encoder() {
+        Some("libx264") => {
+            args.extend(["-c:v", "libx264", "-preset", "medium"].map(String::from));
+            match bitrate {
+                Some(rate) => args.extend(["-b:v".to_string(), rate.clone()]),
+                None => args.extend(["-crf", "23"].map(String::from)),
+            }
+        }
+        Some("libopenh264") => {
+            // OpenH264 has no CRF mode; a target bitrate is always required.
+            args.extend(["-c:v", "libopenh264"].map(String::from));
+            let rate = bitrate.clone().unwrap_or_else(|| "2M".to_string());
+            args.extend(["-b:v".to_string(), rate]);
+        }
+        _ => {
+            // Last resort that every FFmpeg build ships: MPEG-4 Part 2.
+            args.extend(["-c:v", "mpeg4", "-q:v", "5"].map(String::from));
+        }
+    }
+}
+
 fn bitrate_arg(options: &crate::converters::ConvertOptions) -> Option<String> {
     options
         .bitrate_kbps
@@ -91,13 +204,13 @@ pub fn build_args(
         "pipe:2",
         "-nostats",
         "-y",
-        "-map_metadata",
-        "-1",
         "-i",
     ]
     .map(String::from)
     .to_vec();
     args.push(input);
+    // Strip metadata: it must be an output option, i.e. placed after `-i`.
+    args.extend(["-map_metadata", "-1"].map(String::from));
 
     let bitrate = bitrate_arg(options);
     let scale = options.video_scale.as_deref().and_then(safe_scale);
@@ -141,11 +254,7 @@ pub fn build_args(
     } else {
         match target_id {
             "mp4" | "mov" => {
-                args.extend(["-c:v", "libx264", "-preset", "medium"].map(String::from));
-                match &bitrate {
-                    Some(rate) => args.extend(["-b:v".to_string(), rate.clone()]),
-                    None => args.extend(["-crf", "23"].map(String::from)),
-                }
+                push_h264_args(&mut args, &bitrate);
                 args.extend(["-c:a", "aac", "-b:a", "192k"].map(String::from));
                 if target_id == "mp4" {
                     args.extend(["-movflags", "+faststart"].map(String::from));
@@ -155,11 +264,7 @@ pub fn build_args(
                 }
             }
             "mkv" => {
-                args.extend(["-c:v", "libx264", "-preset", "medium"].map(String::from));
-                match &bitrate {
-                    Some(rate) => args.extend(["-b:v".to_string(), rate.clone()]),
-                    None => args.extend(["-crf", "23"].map(String::from)),
-                }
+                push_h264_args(&mut args, &bitrate);
                 args.extend(["-c:a", "aac"].map(String::from));
                 if let Some(scale) = &scale {
                     args.extend(["-vf".to_string(), format!("scale={scale}")]);
@@ -219,6 +324,7 @@ pub async fn convert(request: &ConvertRequest, progress: ProgressFn) -> Result<(
     let args = build_args(&input, &output, &request.target_id, &request.options)?;
 
     let ffmpeg = detector::find_binary("ffmpeg").unwrap_or_else(|| PathBuf::from("ffmpeg"));
+    ensure_ffmpeg_supported(&ffmpeg)?;
     let state = Arc::new(Mutex::new(AvProgress::default()));
     let line_state = state.clone();
     let line_progress = progress.clone();
@@ -263,7 +369,9 @@ pub async fn convert(request: &ConvertRequest, progress: ProgressFn) -> Result<(
     let mut cmd = tokio::process::Command::new(ffmpeg);
     cmd.args(&args);
 
-    let result = process::run_captured(cmd, timeout, None, Some(handler)).await?;
+    let workdir = process::sandbox_workdir();
+    let result =
+        process::run_captured(cmd, timeout, None, Some(workdir.as_path()), Some(handler)).await?;
     if result.timed_out {
         bail!("FFmpeg zaman sınırını aştı ve öldürüldü");
     }
@@ -295,6 +403,20 @@ mod tests {
             max_file_size: 1024 * 1024,
             archive_limits: ArchiveLimits::default(),
         }
+    }
+
+    #[test]
+    fn parses_ffmpeg_version_banner() {
+        assert_eq!(
+            parse_ffmpeg_major("ffmpeg version 7.1.1 Copyright (c) 2000-2024"),
+            Some(7)
+        );
+        assert_eq!(
+            parse_ffmpeg_major("ffmpeg version n6.0-15-g1234ab Copyright"),
+            Some(6)
+        );
+        assert_eq!(parse_ffmpeg_major("ffmpeg version 4.4.2"), Some(4));
+        assert_eq!(parse_ffmpeg_major("tanınmayan çıktı"), None);
     }
 
     #[test]
@@ -370,5 +492,111 @@ mod tests {
         assert_eq!(safe_scale("1280:-2"), Some("1280:-2".to_string()));
         assert_eq!(safe_scale("1280:-2; rm -rf /"), None);
         assert_eq!(safe_scale(""), None);
+    }
+
+    fn ffmpeg_available() -> bool {
+        crate::core::detector::find_binary("ffmpeg").is_some()
+    }
+
+    fn real_request(
+        input: PathBuf,
+        output: PathBuf,
+        source: &'static crate::core::registry::Format,
+        target: &str,
+    ) -> ConvertRequest {
+        ConvertRequest {
+            input,
+            output,
+            source,
+            target_id: target.to_string(),
+            options: ConvertOptions {
+                image_quality: 90,
+                bitrate_kbps: None,
+                video_scale: None,
+                timeout: Duration::from_secs(120),
+                max_file_size: 64 * 1024 * 1024,
+                archive_limits: ArchiveLimits::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn encoder_list_is_parsed() {
+        let table = "Encoders:\n V..... = Video\n ------\n V....D libx264              H.264\n A....D aac                  AAC\n";
+        let set = parse_encoder_list(table);
+        assert!(set.contains("libx264"));
+        assert!(set.contains("aac"));
+        assert!(!set.contains("Encoders:"));
+        assert!(!set.contains("="));
+    }
+
+    fn encoder_present(name: &str) -> bool {
+        available_encoders().contains(name)
+    }
+
+    /// End-to-end check against the real binary; skipped when ffmpeg is absent.
+    ///
+    /// Each target is only exercised when the required encoder exists, so the
+    /// test is portable across Fedora (`ffmpeg-free`) and full builds.
+    #[tokio::test]
+    async fn real_ffmpeg_covers_every_target() {
+        if !ffmpeg_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("kaynak.mp4");
+        let generated = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=160x120:rate=10",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440",
+                "-t",
+                "1",
+                "-y",
+            ])
+            .arg(&input)
+            .status()
+            .await
+            .expect("ffmpeg çalıştırılamadı");
+        assert!(generated.success());
+
+        // (target, required encoders)
+        let targets: &[(&str, &[&str])] = &[
+            ("mp4", &[]),
+            ("mkv", &[]),
+            ("mov", &[]),
+            ("webm", &["libvpx-vp9", "libopus"]),
+            ("avi", &["mpeg4", "libmp3lame"]),
+            ("gif", &[]),
+            ("mp3", &["libmp3lame"]),
+            ("wav", &["pcm_s16le"]),
+            ("flac", &["flac"]),
+            ("ogg", &["libvorbis"]),
+            ("opus", &["libopus"]),
+            ("aac", &["aac"]),
+            ("m4a", &["aac"]),
+        ];
+
+        let source = crate::core::registry::format_by_id("mp4").unwrap();
+        for (target, encoders) in targets {
+            if !encoders.iter().all(|name| encoder_present(name)) {
+                continue;
+            }
+            let output = dir.path().join(format!("cikti.{target}"));
+            let request = real_request(input.clone(), output.clone(), source, target);
+            convert(&request, std::sync::Arc::new(|_| {}))
+                .await
+                .unwrap_or_else(|error| panic!("{target} dönüşümü başarısız: {error:#}"));
+            let meta = std::fs::metadata(&output).unwrap();
+            assert!(meta.len() > 512, "{target} çıktısı çok küçük");
+        }
     }
 }

@@ -130,6 +130,33 @@ pub fn unique_output_path_reserved(
     }
 }
 
+/// Returns the exact output path for explicit overwrite mode.
+///
+/// The path is still sanitised and de-duplicated between jobs in the same
+/// batch, but it is not renamed with a numeric suffix.
+pub fn explicit_output_path(
+    dir: &Path,
+    stem: &str,
+    ext: &str,
+    taken: &mut HashSet<PathBuf>,
+) -> PathBuf {
+    let base = sanitise_stem(stem);
+    let ext = ext.trim_start_matches('.');
+    let mut index = 0u32;
+    loop {
+        let name = if index == 0 {
+            format_name(&base, ext)
+        } else {
+            format_name(&format!("{base}-{index}"), ext)
+        };
+        let candidate = dir.join(name);
+        if taken.insert(candidate.clone()) {
+            return candidate;
+        }
+        index = index.saturating_add(1);
+    }
+}
+
 fn sanitise_stem(stem: &str) -> String {
     let cleaned: String = stem
         .chars()
@@ -193,6 +220,17 @@ mod tests {
         let b = unique_output_path_reserved(dir.path(), "a", "mp4", &mut taken);
         assert_eq!(a.file_name().unwrap(), "a.mp4");
         assert_eq!(b.file_name().unwrap(), "a-1.mp4");
+    }
+
+    #[test]
+    fn explicit_path_keeps_existing_name_but_dedupes_batch_items() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.mp4"), b"x").expect("write");
+        let mut taken = HashSet::new();
+        let first = explicit_output_path(dir.path(), "a", "mp4", &mut taken);
+        assert_eq!(first.file_name().unwrap(), "a.mp4");
+        let second = explicit_output_path(dir.path(), "a", "mp4", &mut taken);
+        assert_eq!(second.file_name().unwrap(), "a-1.mp4");
     }
 
     #[test]

@@ -44,6 +44,8 @@ pub struct JobRequest {
     pub source: &'static Format,
     pub target_id: String,
     pub options: ConvertOptions,
+    /// When false (default) an existing output file is never replaced.
+    pub overwrite: bool,
 }
 
 /// Owns the runtime and the two channels used by the UI.
@@ -90,6 +92,7 @@ impl JobRunner {
     }
 
     /// Schedules a job and returns its identifier.
+    #[allow(clippy::too_many_arguments)]
     pub fn submit(
         &self,
         input: PathBuf,
@@ -97,6 +100,7 @@ impl JobRunner {
         source: &'static Format,
         target_id: String,
         options: ConvertOptions,
+        overwrite: bool,
     ) -> u64 {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let request = JobRequest {
@@ -106,6 +110,7 @@ impl JobRunner {
             source,
             target_id,
             options,
+            overwrite,
         };
         if self.submit.send(request).is_err() {
             // The runtime is gone; surface this as a failed job when polled.
@@ -229,7 +234,7 @@ async fn execute(request: JobRequest, id: u64, events: &Sender<JobUpdate>) -> Re
         return Ok(output);
     }
 
-    process::finalise_output(&working_output, &output).await?;
+    process::finalise_output(&working_output, &output, request.overwrite).await?;
     Ok(output)
 }
 
@@ -263,6 +268,7 @@ mod tests {
             source,
             "jpg".to_string(),
             ConvertOptions::from(&test_config()),
+            false,
         );
 
         let deadline = Instant::now() + Duration::from_secs(20);
@@ -300,6 +306,7 @@ mod tests {
             source,
             "exe".to_string(),
             ConvertOptions::from(&test_config()),
+            false,
         );
 
         let deadline = Instant::now() + Duration::from_secs(10);
