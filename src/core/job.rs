@@ -294,6 +294,58 @@ mod tests {
         assert!(output.exists());
     }
 
+    fn wait_for(runner: &JobRunner, id: u64) -> JobUpdate {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while Instant::now() < deadline {
+            while let Some(update) = runner.try_recv() {
+                if update.id == id && matches!(update.status, JobStatus::Done | JobStatus::Failed) {
+                    return update;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("iş zamanında bitmedi");
+    }
+
+    #[test]
+    fn archive_jobs_create_and_extract() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("belge.txt");
+        std::fs::write(&input, b"arsiv icerigi").unwrap();
+        let runner = JobRunner::new(&test_config()).unwrap();
+
+        let zip_path = dir.path().join("belge.zip");
+        let source = registry::format_by_id("txt").unwrap();
+        let id = runner.submit(
+            input.clone(),
+            zip_path.clone(),
+            source,
+            "zip".to_string(),
+            ConvertOptions::from(&test_config()),
+            false,
+        );
+        let done = wait_for(&runner, id);
+        assert_eq!(done.status, JobStatus::Done, "{:?}", done.message);
+        assert!(zip_path.exists());
+
+        let out_dir = dir.path().join("ayiklanan");
+        let zip_source = registry::format_by_id("zip").unwrap();
+        let id = runner.submit(
+            zip_path,
+            out_dir.clone(),
+            zip_source,
+            registry::EXTRACT.to_string(),
+            ConvertOptions::from(&test_config()),
+            false,
+        );
+        let done = wait_for(&runner, id);
+        assert_eq!(done.status, JobStatus::Done, "{:?}", done.message);
+        assert_eq!(
+            std::fs::read(out_dir.join("belge.txt")).unwrap(),
+            b"arsiv icerigi"
+        );
+    }
+
     #[test]
     fn mismatched_magic_is_rejected() {
         let dir = tempfile::tempdir().unwrap();

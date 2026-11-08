@@ -44,5 +44,16 @@
 - [x] cargo audit (CI: rustsec/audit-check)
 - [x] Zip bomb / path traversal / argüman enjeksiyonu testleri
 
+## Notlar
+- M0: `util/process.rs` tüm harici çağrıları tek noktadan sarar (env temizliği, `kill_on_drop`, zaman aşımı, sınırlı stderr).
+- M1: Sihirbaz `pkexec` + sabit paket listesi kullanır; kurulum çıktısı kısaltılarak gösterilir.
+- M2: Çıktı adı `-1`, `-2` ile çakışma çözer; nihai yol `create_new` ile ayrılır, üzerine yazma varsayılan kapalı.
+- M3: H.264 kodlayıcı `libx264 → libopenh264 → mpeg4` sırasıyla seçilir; FFmpeg < 4 reddedilir.
+- M4: Belge hedefleri araç kurulumuna göre filtrelenir; TXT/CSV bellekte UTF-8'e çevrilir (256 MiB sınırı).
+- M5: Zip bomb (oran + toplam boyut + girdi sayısı), path traversal ve symlink girdileri reddedilir.
+- M6: `scripts/package-appimage.sh` üretimi 4.6 MB AppImage olarak doğrulandı (hedef 10-20 MB'ın altında).
+- Test: 89 birim/uçtan uca test; `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
+
 ## V2 fikirleri (şimdilik yapma)
 - Toplu önizleme, format öneri motoru, sağ tık menüsü entegrasyonu (Nautilus/Dolphin), arşiv desteği genişletme
+- AVIF hedefi (`ravif`) ve SVG kaynağı (`resvg`) için yeni bağımlılık önerisi — AGENTS.md gereği ajan tek başına eklemez
