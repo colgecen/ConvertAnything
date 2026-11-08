@@ -144,7 +144,7 @@ impl ConvertView {
             ui.set_width(ui.available_width());
             ui.vertical_centered(|ui| {
                 ui.add_space(14.0);
-                ui.label(RichText::new("⇩").size(42.0).color(ACCENT));
+                drop_icon(ui, 52.0);
                 ui.add_space(2.0);
                 ui.label(
                     RichText::new("Dosyalarınızı buraya bırakın")
@@ -227,52 +227,49 @@ impl ConvertView {
                 ui.add_space(6.0);
 
                 let mut remove: Option<usize> = None;
-                egui::ScrollArea::vertical()
-                    .id_salt("dosya-listesi")
-                    .max_height(300.0)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for (index, file) in self.files.iter().enumerate() {
-                            egui::Frame::default()
-                                .fill(ui.visuals().faint_bg_color)
-                                .corner_radius(8)
-                                .inner_margin(egui::Margin::symmetric(10, 7))
-                                .show(ui, |ui| {
-                                    ui.set_width(ui.available_width());
-                                    ui.horizontal(|ui| {
-                                        kind_badge(ui, file.format.kind);
-                                        ui.vertical(|ui| {
-                                            ui.label(
-                                                RichText::new(display_name(&file.path)).strong(),
-                                            );
-                                            ui.label(
-                                                RichText::new(format!(
-                                                    "{} · {} · {}",
-                                                    file.format.label,
-                                                    file.format.id,
-                                                    human_size(file.size)
-                                                ))
-                                                .small()
-                                                .color(MUTED),
-                                            );
-                                        });
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                if ui
-                                                    .small_button("✕")
-                                                    .on_hover_text("Listeden çıkar")
-                                                    .clicked()
-                                                {
-                                                    remove = Some(index);
-                                                }
-                                            },
-                                        );
-                                    });
+                for (index, file) in self.files.iter().enumerate() {
+                    egui::Frame::default()
+                        .fill(ui.visuals().faint_bg_color)
+                        .corner_radius(8)
+                        .inner_margin(egui::Margin::symmetric(10, 7))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                kind_badge(ui, file.format.kind);
+                                ui.vertical(|ui| {
+                                    ui.label(RichText::new(display_name(&file.path)).strong());
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} · {} · {}",
+                                            file.format.label,
+                                            file.format.id,
+                                            human_size(file.size)
+                                        ))
+                                        .small()
+                                        .color(MUTED),
+                                    );
                                 });
-                            ui.add_space(4.0);
-                        }
-                    });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui
+                                            .add(
+                                                egui::Button::new(
+                                                    RichText::new("Kaldır").small().color(DANGER),
+                                                )
+                                                .frame(false),
+                                            )
+                                            .on_hover_text("Listeden çıkar")
+                                            .clicked()
+                                        {
+                                            remove = Some(index);
+                                        }
+                                    },
+                                );
+                            });
+                        });
+                    ui.add_space(4.0);
+                }
                 if let Some(index) = remove {
                     self.files.remove(index);
                 }
@@ -412,7 +409,7 @@ impl ConvertView {
             if !tool_ready {
                 ui.colored_label(
                     DANGER,
-                    "Gerekli araç kurulu değil. Ayarlar → Harici araçlar bölümünden kurabilirsiniz.",
+                    "Gerekli araç kurulu değil. Ayarlar > Harici araçlar bölümünden kurabilirsiniz.",
                 );
             }
         });
@@ -467,6 +464,63 @@ fn card(ui: &mut egui::Ui, stroke: Color32, add: impl FnOnce(&mut egui::Ui)) {
         .corner_radius(12)
         .inner_margin(egui::Margin::same(14))
         .show(ui, add);
+}
+
+/// Paints a drop/import glyph with primitives.
+///
+/// Drawing the icon instead of using a Unicode symbol keeps it visible on
+/// systems whose fonts lack the emoji/dingbat ranges.
+fn drop_icon(ui: &mut egui::Ui, size: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
+    let painter = ui.painter();
+    let stroke = Stroke::new(2.0, ACCENT);
+    let center = rect.center();
+    let arrow_top = center.y - size * 0.34;
+    let arrow_tip = center.y + size * 0.20;
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_top),
+            egui::pos2(center.x, arrow_tip),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_tip),
+            egui::pos2(center.x - size * 0.16, arrow_tip - size * 0.14),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_tip),
+            egui::pos2(center.x + size * 0.16, arrow_tip - size * 0.14),
+        ],
+        stroke,
+    );
+    let tray_y = center.y + size * 0.38;
+    let tray_x = size * 0.30;
+    painter.line_segment(
+        [
+            egui::pos2(center.x - tray_x, tray_y - size * 0.12),
+            egui::pos2(center.x - tray_x, tray_y),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x - tray_x, tray_y),
+            egui::pos2(center.x + tray_x, tray_y),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x + tray_x, tray_y),
+            egui::pos2(center.x + tray_x, tray_y - size * 0.12),
+        ],
+        stroke,
+    );
 }
 
 fn kind_badge(ui: &mut egui::Ui, kind: MediaKind) {

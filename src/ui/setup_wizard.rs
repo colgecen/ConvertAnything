@@ -153,7 +153,12 @@ impl SetupWizard {
                 for status in tools {
                     ui.horizontal(|ui| {
                         if status.available() {
-                            ui.label(RichText::new("✔").color(Color32::from_rgb(80, 160, 90)));
+                            ui.label(
+                                RichText::new("kurulu")
+                                    .small()
+                                    .strong()
+                                    .color(Color32::from_rgb(80, 160, 90)),
+                            );
                             ui.label(status.tool.display_name());
                             ui.label(RichText::new("kurulu").small().color(Color32::GRAY));
                         } else {

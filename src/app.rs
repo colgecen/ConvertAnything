@@ -300,45 +300,36 @@ impl DonusturApp {
                 });
                 ui.add_space(6.0);
 
-                egui::ScrollArea::vertical()
-                    .id_salt("isler")
-                    .max_height(200.0)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for job in &self.jobs {
-                            let (label, color) = match job.status {
-                                JobStatus::Queued => ("Sırada", MUTED),
-                                JobStatus::Running => ("Çalışıyor", ACCENT),
-                                JobStatus::Done => ("Tamam", SUCCESS),
-                                JobStatus::Failed => ("Hata", DANGER),
-                            };
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(label).small().color(color).strong());
-                                ui.label(RichText::new(&job.name).strong());
-                                ui.label(
-                                    RichText::new(format!("→ .{}", job.target))
-                                        .small()
-                                        .color(MUTED),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.add(
-                                            egui::ProgressBar::new(job.progress as f32 / 100.0)
-                                                .desired_width(160.0)
-                                                .corner_radius(6)
-                                                .fill(color)
-                                                .show_percentage(),
-                                        );
-                                    },
-                                );
-                            });
-                            if let Some(message) = &job.message {
-                                let text = truncate(message, 300);
-                                ui.label(RichText::new(text).small().color(DANGER));
-                            }
-                        }
+                for job in &self.jobs {
+                    let (label, color) = match job.status {
+                        JobStatus::Queued => ("Sırada", MUTED),
+                        JobStatus::Running => ("Çalışıyor", ACCENT),
+                        JobStatus::Done => ("Tamam", SUCCESS),
+                        JobStatus::Failed => ("Hata", DANGER),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(label).small().color(color).strong());
+                        ui.label(RichText::new(&job.name).strong());
+                        ui.label(
+                            RichText::new(format!(".{} biçimine", job.target))
+                                .small()
+                                .color(MUTED),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add(
+                                egui::ProgressBar::new(job.progress as f32 / 100.0)
+                                    .desired_width(160.0)
+                                    .corner_radius(6)
+                                    .fill(color)
+                                    .show_percentage(),
+                            );
+                        });
                     });
+                    if let Some(message) = &job.message {
+                        let text = truncate(message, 300);
+                        ui.label(RichText::new(text).small().color(DANGER));
+                    }
+                }
             });
     }
 
@@ -439,20 +430,23 @@ impl DonusturApp {
             )
             .show(root, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("◆").size(22.0).color(ACCENT));
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Dönüştür").size(20.0).strong());
-                        ui.label(
-                            RichText::new("Tek ekranda toplu dosya dönüşümü")
-                                .small()
-                                .color(MUTED),
-                        );
-                    });
+                    let title = ui.add(
+                        egui::Button::new(RichText::new("Dönüştür").size(20.0).strong())
+                            .frame(false),
+                    );
+                    if title.on_hover_text("Dönüştürme ekranına dön").clicked() {
+                        self.screen = Screen::Convert;
+                    }
+                    ui.label(
+                        RichText::new("Tek ekranda toplu dosya dönüşümü")
+                            .small()
+                            .color(MUTED),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let settings_label = if self.screen == Screen::Settings {
-                            "← Dönüştür"
+                            "Dönüştür"
                         } else {
-                            "⚙ Ayarlar"
+                            "Ayarlar"
                         };
                         if ui.button(settings_label).clicked() {
                             self.screen = if self.screen == Screen::Settings {
@@ -496,7 +490,6 @@ impl DonusturApp {
             )
             .show(root, |ui| {
                 ui.horizontal(|ui| {
-                    ui.colored_label(color, "●");
                     ui.colored_label(color, text);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("Kapat").clicked() {
@@ -525,17 +518,33 @@ impl eframe::App for DonusturApp {
         self.draw_header(ui);
         self.draw_toast(ui);
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            let hovering = ctx.input(|input| !input.raw.hovered_files.is_empty());
-            if hovering {
-                ui.add_space(2.0);
-                ui.colored_label(ACCENT, "Dosyaları bırakmak için fareyi serbest bırakın.");
-            }
-            match self.screen {
-                Screen::Settings => self.show_settings(ui),
-                Screen::Convert => self.show_convert(ui),
-            }
-        });
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::default()
+                    .inner_margin(egui::Margin::symmetric(16, 10))
+                    .fill(ui.visuals().panel_fill),
+            )
+            .show(ui, |ui| {
+                let hovering = ctx.input(|input| !input.raw.hovered_files.is_empty());
+                if hovering {
+                    ui.add_space(2.0);
+                    ui.colored_label(ACCENT, "Dosyaları bırakmak için fareyi serbest bırakın.");
+                }
+                match self.screen {
+                    Screen::Settings => self.show_settings(ui),
+                    Screen::Convert => {
+                        // Everything scrolls together so the action bar stays
+                        // reachable even in a small window.
+                        egui::ScrollArea::vertical()
+                            .id_salt("donusum-ekrani")
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                self.show_convert(ui);
+                            });
+                    }
+                }
+            });
 
         let action = self.wizard.show(&ctx, &self.tools, self.manager);
         if let Some(action) = action {
