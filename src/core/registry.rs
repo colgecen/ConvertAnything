@@ -299,6 +299,53 @@ pub fn looks_executable(path: &Path) -> bool {
         || head.starts_with(&[0xCA, 0xFE, 0xBA, 0xBF])
 }
 
+/// Container/extension pairs that legitimately share magic bytes.
+///
+/// Office documents and EPUB are ZIP containers, `tar.gz` is GZIP, and
+/// `m4a`/`aac` live inside MP4 containers.
+fn magic_families(kind: MediaKind) -> &'static [&'static str] {
+    match kind {
+        MediaKind::Image => &["jpg", "png", "webp", "bmp", "tiff", "gif", "ico"],
+        MediaKind::Audio => &[
+            "mp3", "wav", "flac", "ogg", "opus", "aac", "m4a", "mp4", "mov", "m4b",
+        ],
+        MediaKind::Video => &["mp4", "m4v", "mov", "mkv", "webm", "avi", "gif"],
+        MediaKind::Document => &[
+            "pdf", "zip", "gz", "tar", "rtf", "html", "xml", "epub", "docx", "xlsx", "pptx", "odt",
+            "ods", "odp", "doc", "xls",
+        ],
+        MediaKind::Archive => &["zip", "gz", "tar", "bz2", "xz", "zst", "7z"],
+    }
+}
+
+/// Checks the file's magic bytes against the declared format.
+///
+/// A mismatch between *families* (for example a ZIP renamed to `.mp4`) is
+/// rejected. Within a family the exact subtype is not enforced because
+/// containers are intentionally interchangeable (`docx`/`odt`/`epub` are all
+/// ZIP, `m4a` is MP4). Files whose type cannot be sniffed (plain text) are
+/// accepted and validated later by the converter.
+pub fn verify_magic(path: &Path, declared: &Format) -> Result<()> {
+    if looks_executable(path) {
+        bail!("dosya içeriği yürütülebilir bir biçim olarak algılandı");
+    }
+    let Some(sniffed) = infer::get_from_path(path).ok().flatten() else {
+        return Ok(());
+    };
+    let ext = sniffed.extension().to_ascii_lowercase();
+    if ext == declared.id || declared.aliases.contains(&ext.as_str()) {
+        return Ok(());
+    }
+    if magic_families(declared.kind).contains(&ext.as_str()) {
+        return Ok(());
+    }
+    bail!(
+        "dosya içeriği uzantıyla uyuşmuyor (içerik: {}, beklenen: {})",
+        sniffed.mime_type(),
+        declared.id
+    )
+}
+
 /// Validates that a path is a convertible, non-executable file.
 pub fn validate_source(path: &Path) -> Result<&'static Format> {
     let Some(format) = detect_format(path) else {
@@ -503,6 +550,55 @@ mod tests {
         let png = dir.path().join("real.png");
         std::fs::write(&png, [0x89, b'P', b'N', b'G', 0x0D]).unwrap();
         assert!(!looks_executable(&png));
+    }
+
+    #[test]
+    fn magic_check_accepts_matching_and_family_content() {
+        let dir = tempfile::tempdir().unwrap();
+        // Real PNG header is enough for `infer`.
+        let png = dir.path().join("a.jpg");
+        std::fs::write(
+            &png,
+            b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0",
+        )
+        .unwrap();
+        // A JPG extension holding a PNG is still an image: allowed.
+        assert!(verify_magic(&png, format_by_id("jpg").unwrap()).is_ok());
+
+        // Office documents are ZIP containers.
+        let docx = dir.path().join("a.docx");
+        std::fs::write(&docx, b"PK\x03\x04\x14\x00\x00\x00\x08\x00").unwrap();
+        assert!(verify_magic(&docx, format_by_id("docx").unwrap()).is_ok());
+    }
+
+    #[test]
+    fn magic_check_rejects_cross_family_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("sahte.mp4");
+        std::fs::write(&zip, b"PK\x03\x04\x14\x00\x00\x00\x08\x00").unwrap();
+        let result = verify_magic(&zip, format_by_id("mp4").unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn magic_check_accepts_archives_and_targz() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("a.zip");
+        std::fs::write(&zip, b"PK\x03\x04\x14\x00\x00\x00\x08\x00").unwrap();
+        assert!(verify_magic(&zip, format_by_id("zip").unwrap()).is_ok());
+
+        let tgz = dir.path().join("a.tar.gz");
+        // GZIP header: 1f 8b 08 ...
+        std::fs::write(&tgz, [0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0, 0xff]).unwrap();
+        assert!(verify_magic(&tgz, format_by_id("tar.gz").unwrap()).is_ok());
+    }
+
+    #[test]
+    fn magic_check_allows_unsniffable_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let txt = dir.path().join("notlar.txt");
+        std::fs::write(&txt, b"duz metin, imzasi yok").unwrap();
+        assert!(verify_magic(&txt, format_by_id("txt").unwrap()).is_ok());
     }
 
     #[test]

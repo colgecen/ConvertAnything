@@ -495,6 +495,13 @@ impl DonusturApp {
                     if self.runner.is_none() {
                         ui.colored_label(Color32::from_rgb(200, 90, 60), "İş kuyruğu kapalı");
                     }
+                    if ui
+                        .button("Araçları yenile")
+                        .on_hover_text("Harici araçların kurulu olup olmadığını yeniden denetle")
+                        .clicked()
+                    {
+                        self.refresh_tools();
+                    }
                 });
             });
             ui.add_space(4.0);

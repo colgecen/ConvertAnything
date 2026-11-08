@@ -166,6 +166,7 @@ async fn execute(request: JobRequest, id: u64, events: &Sender<JobUpdate>) -> Re
     if detected.id != request.source.id {
         bail!("dosya türü değişmiş görünüyor");
     }
+    registry::verify_magic(&input, detected)?;
     if !registry::is_supported(detected, &request.target_id) {
         bail!("bu dönüşüm desteklenmiyor");
     }
@@ -291,6 +292,37 @@ mod tests {
         }
         assert!(done, "iş zamanında tamamlanmadı");
         assert!(output.exists());
+    }
+
+    #[test]
+    fn mismatched_magic_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("sahte.png");
+        // A ZIP payload renamed to `.png` must never reach the image decoder.
+        std::fs::write(&input, b"PK\x03\x04\x14\x00\x00\x00\x08\x00").unwrap();
+        let runner = JobRunner::new(&test_config()).unwrap();
+        let source = registry::format_by_id("png").unwrap();
+        let id = runner.submit(
+            input,
+            dir.path().join("cikti.jpg"),
+            source,
+            "jpg".to_string(),
+            ConvertOptions::from(&test_config()),
+            false,
+        );
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            if let Some(update) = runner.try_recv() {
+                if update.id == id && update.status == JobStatus::Failed {
+                    let message = update.message.unwrap_or_default();
+                    assert!(message.contains("uyuşmuyor"), "beklenmeyen hata: {message}");
+                    return;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("uyuşmayan içerik reddedilmedi");
     }
 
     #[test]
