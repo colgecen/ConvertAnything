@@ -57,8 +57,22 @@ impl Tab {
             MediaKind::Archive => Tab::Archive,
         }
     }
+}
 
-    pub fn index(self) -> Option<usize> {
-        Tab::CONVERT_TABS.iter().position(|t| *t == self)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tabs_round_trip_through_media_kind() {
+        for tab in Tab::CONVERT_TABS {
+            let kind = tab.kind().expect("dönüşüm sekmesi");
+            assert_eq!(Tab::for_kind(kind), tab);
+        }
+    }
+
+    #[test]
+    fn settings_has_no_media_kind() {
+        assert!(Tab::Settings.kind().is_none());
     }
 }

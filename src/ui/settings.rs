@@ -278,3 +278,43 @@ impl SettingsView {
         action
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::detector::Tool;
+
+    fn statuses() -> Vec<ToolStatus> {
+        Tool::ALL
+            .into_iter()
+            .map(|tool| ToolStatus { tool, path: None })
+            .collect()
+    }
+
+    #[test]
+    fn renders_without_duplicate_id_panics() {
+        let mut view = SettingsView::new(&Config::default());
+        let tools = statuses();
+        // Two consecutive frames: egui detects duplicate widget ids only on
+        // the second pass.
+        egui::__run_test_ui(|ui| {
+            let _ = view.show(ui, &tools, Some(PackageManager::Dnf));
+        });
+        egui::__run_test_ui(|ui| {
+            let _ = view.show(ui, &tools, None);
+        });
+    }
+
+    #[test]
+    fn sync_resets_dirty_flag() {
+        let mut view = SettingsView::new(&Config::default());
+        view.dirty = true;
+        let config = Config {
+            image_quality: 55,
+            ..Config::default()
+        };
+        view.sync(&config);
+        assert!(!view.dirty);
+        assert_eq!(view.draft.image_quality, 55);
+    }
+}

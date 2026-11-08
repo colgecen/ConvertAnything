@@ -104,6 +104,15 @@ impl DonusturApp {
         });
     }
 
+    /// Index of the conversion view backing `tab`.
+    ///
+    /// Views are stored in `Tab::CONVERT_TABS` order, but the lookup is by
+    /// media kind so reordering the tabs can never silently mismatch them.
+    fn view_index(&self, tab: Tab) -> Option<usize> {
+        let kind = tab.kind()?;
+        self.views.iter().position(|view| view.kind == kind)
+    }
+
     fn tab_enabled(&self, tab: Tab) -> bool {
         match tab {
             Tab::Audio | Tab::Video => tool_available(&self.tools, Tool::Ffmpeg),
@@ -177,7 +186,7 @@ impl DonusturApp {
                 rejected += 1;
                 continue;
             }
-            let Some(index) = tab.index() else {
+            let Some(index) = self.view_index(tab) else {
                 rejected += 1;
                 continue;
             };
@@ -298,7 +307,7 @@ impl DonusturApp {
         }
 
         if submitted > 0 {
-            if let Some(index) = self.tab.index() {
+            if let Some(index) = self.view_index(self.tab) {
                 self.views[index].files.clear();
             }
             self.notify(format!("{submitted} iş kuyruğa eklendi."), false);
@@ -306,7 +315,7 @@ impl DonusturApp {
     }
 
     fn show_convert(&mut self, ui: &mut egui::Ui) {
-        let Some(index) = self.tab.index() else {
+        let Some(index) = self.view_index(self.tab) else {
             return;
         };
         let tools = self.tools.clone();

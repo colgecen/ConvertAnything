@@ -345,7 +345,14 @@ impl ConvertView {
 }
 
 fn target_allowed(tools: &[ToolStatus], source: &Format, target: &Format) -> bool {
-    if source.kind != MediaKind::Document || target.kind == MediaKind::Archive {
+    if target.kind == MediaKind::Archive {
+        return true;
+    }
+    if matches!(source.kind, MediaKind::Audio | MediaKind::Video) {
+        // Some distributions ship an FFmpeg build without certain encoders.
+        return crate::converters::av::target_supported(target.id);
+    }
+    if source.kind != MediaKind::Document {
         return true;
     }
     match document::strategy(source.id, target.id) {
@@ -381,11 +388,77 @@ pub fn human_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::detector::Tool;
 
     #[test]
     fn human_size_formats() {
         assert_eq!(human_size(0), "0 B");
         assert_eq!(human_size(1024), "1.0 KiB");
         assert_eq!(human_size(1536), "1.5 KiB");
+    }
+
+    fn all_installed() -> Vec<ToolStatus> {
+        Tool::ALL
+            .into_iter()
+            .map(|tool| ToolStatus {
+                tool,
+                path: Some(PathBuf::from("/usr/bin")).map(|p| p.join(tool.id())),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn renders_empty_and_populated_states() {
+        let tools = all_installed();
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("a.png");
+        image::RgbaImage::new(2, 2).save(&image).unwrap();
+
+        let mut view = ConvertView::new(MediaKind::Image, 90, None, None);
+        egui::__run_test_ui(|ui| {
+            assert!(!view.show(ui, &tools));
+        });
+
+        assert!(view.add_path(image));
+        egui::__run_test_ui(|ui| {
+            assert!(!view.show(ui, &tools));
+        });
+        assert_eq!(view.files.len(), 1);
+        assert!(view.target.is_some());
+    }
+
+    #[test]
+    fn rejects_wrong_kind_and_executables() {
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("a.mp3");
+        std::fs::write(&audio, b"x").unwrap();
+        let elf = dir.path().join("b.png");
+        std::fs::write(&elf, b"\x7fELF").unwrap();
+
+        let mut view = ConvertView::new(MediaKind::Image, 90, None, None);
+        assert!(
+            !view.add_path(audio),
+            "ses dosyası görsel sekmesine girmemeli"
+        );
+        assert!(!view.add_path(elf), "ELF içerikli dosya reddedilmeli");
+        assert!(view.files.is_empty());
+    }
+
+    #[test]
+    fn target_list_requires_installed_engine() {
+        let dir = tempfile::tempdir().unwrap();
+        let md = dir.path().join("a.md");
+        std::fs::write(&md, b"# baslik\n").unwrap();
+
+        let mut view = ConvertView::new(MediaKind::Document, 90, None, None);
+        assert!(view.add_path(md));
+
+        let none_installed: Vec<ToolStatus> = Tool::ALL
+            .into_iter()
+            .map(|tool| ToolStatus { tool, path: None })
+            .collect();
+        // Without LibreOffice/Pandoc only archive packing remains possible.
+        let targets = view.available_targets(&none_installed);
+        assert!(targets.iter().all(|f| f.kind == MediaKind::Archive));
     }
 }

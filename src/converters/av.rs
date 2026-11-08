@@ -149,6 +149,35 @@ fn h264_encoder() -> Option<&'static str> {
     }
 }
 
+/// Encoders that must exist for a target to be producible.
+///
+/// Video targets with an H.264 fallback chain list no hard requirement; audio
+/// targets list their one and only encoder.
+pub fn required_encoders(target_id: &str) -> &'static [&'static str] {
+    match target_id {
+        "mp3" => &["libmp3lame"],
+        "wav" => &["pcm_s16le"],
+        "flac" => &["flac"],
+        "ogg" => &["libvorbis"],
+        "opus" => &["libopus"],
+        "aac" | "m4a" => &["aac"],
+        "webm" => &["libvpx-vp9", "libopus"],
+        "avi" => &["mpeg4", "libmp3lame"],
+        _ => &[],
+    }
+}
+
+/// Whether this FFmpeg build can produce the given target.
+pub fn target_supported(target_id: &str) -> bool {
+    if detector::find_binary("ffmpeg").is_none() {
+        return false;
+    }
+    let encoders = available_encoders();
+    required_encoders(target_id)
+        .iter()
+        .all(|name| encoders.contains(*name))
+}
+
 /// Appends H.264 encoder options, degrading gracefully.
 fn push_h264_args(args: &mut Vec<String>, bitrate: &Option<String>) {
     match h264_encoder() {
@@ -325,6 +354,12 @@ pub async fn convert(request: &ConvertRequest, progress: ProgressFn) -> Result<(
 
     let ffmpeg = detector::find_binary("ffmpeg").unwrap_or_else(|| PathBuf::from("ffmpeg"));
     ensure_ffmpeg_supported(&ffmpeg)?;
+    if !target_supported(&request.target_id) {
+        bail!(
+            "bu FFmpeg kurulumunda {} için gerekli kodlayıcı yok",
+            request.target_id
+        );
+    }
     let state = Arc::new(Mutex::new(AvProgress::default()));
     let line_state = state.clone();
     let line_progress = progress.clone();

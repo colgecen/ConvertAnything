@@ -254,3 +254,65 @@ impl SetupWizard {
         action
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::config::Config;
+
+    fn statuses(missing: &[Tool]) -> Vec<ToolStatus> {
+        Tool::ALL
+            .into_iter()
+            .map(|tool| ToolStatus {
+                tool,
+                path: if missing.contains(&tool) {
+                    None
+                } else {
+                    Some(std::path::PathBuf::from("/usr/bin"))
+                },
+            })
+            .collect()
+    }
+
+    #[test]
+    fn opens_only_when_setup_is_incomplete() {
+        let tools = statuses(&[Tool::Ffmpeg]);
+        let wizard = SetupWizard::new(&Config::default(), &tools);
+        assert!(wizard.open);
+        assert_eq!(wizard.selected, vec![Tool::Ffmpeg]);
+
+        let done = Config {
+            setup_done: true,
+            ..Config::default()
+        };
+        let wizard = SetupWizard::new(&done, &tools);
+        assert!(!wizard.open);
+    }
+
+    #[test]
+    fn closing_the_wizard_counts_as_skip() {
+        let tools = statuses(&[Tool::Ffmpeg]);
+        let mut wizard = SetupWizard::new(&Config::default(), &tools);
+        wizard.open = false;
+        egui::__run_test_ui(|ui| {
+            let action = wizard.show(ui.ctx(), &tools, Some(PackageManager::Dnf));
+            assert!(action.is_none());
+        });
+    }
+
+    #[test]
+    fn reopened_wizard_preselects_missing_tools() {
+        let mut tools = statuses(&[Tool::Ffmpeg]);
+        let mut wizard = SetupWizard::new(
+            &Config {
+                setup_done: true,
+                ..Config::default()
+            },
+            &tools,
+        );
+        tools[0].path = Some(std::path::PathBuf::from("/usr/bin/ffmpeg"));
+        wizard.reopen(&tools);
+        assert!(wizard.open);
+        assert!(wizard.selected.is_empty());
+    }
+}
