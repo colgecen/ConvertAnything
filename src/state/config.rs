@@ -128,7 +128,7 @@ impl Config {
         }
         // Only fixed, known tool identifiers may be skipped.
         self.skipped_tools
-            .retain(|name| matches!(name.as_str(), "ffmpeg" | "soffice" | "pandoc" | "7z"));
+            .retain(|name| matches!(name.as_str(), "ffmpeg" | "soffice" | "pandoc"));
         self.skipped_tools.sort();
         self.skipped_tools.dedup();
         if let Some(scale) = self.video_scale.as_ref() {

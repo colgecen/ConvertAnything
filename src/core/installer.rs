@@ -20,12 +20,10 @@ pub fn packages_for(manager: PackageManager, tool: Tool) -> &'static [&'static s
         (PackageManager::Dnf, Tool::Ffmpeg) => &["ffmpeg-free"],
         (PackageManager::Dnf, Tool::LibreOffice) => &["libreoffice"],
         (PackageManager::Dnf, Tool::Pandoc) => &["pandoc"],
-        (PackageManager::Dnf, Tool::SevenZip) => &["p7zip"],
 
         (PackageManager::Pacman, Tool::Ffmpeg) => &["ffmpeg"],
         (PackageManager::Pacman, Tool::LibreOffice) => &["libreoffice-fresh"],
         (PackageManager::Pacman, Tool::Pandoc) => &["pandoc"],
-        (PackageManager::Pacman, Tool::SevenZip) => &["p7zip"],
     }
 }
 

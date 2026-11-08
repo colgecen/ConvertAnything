@@ -8,16 +8,10 @@ pub enum Tool {
     Ffmpeg,
     LibreOffice,
     Pandoc,
-    SevenZip,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 4] = [
-        Tool::Ffmpeg,
-        Tool::LibreOffice,
-        Tool::Pandoc,
-        Tool::SevenZip,
-    ];
+    pub const ALL: [Tool; 3] = [Tool::Ffmpeg, Tool::LibreOffice, Tool::Pandoc];
 
     /// Stable identifier used in `config.toml`.
     pub fn id(self) -> &'static str {
@@ -25,7 +19,6 @@ impl Tool {
             Tool::Ffmpeg => "ffmpeg",
             Tool::LibreOffice => "soffice",
             Tool::Pandoc => "pandoc",
-            Tool::SevenZip => "7z",
         }
     }
 
@@ -39,7 +32,6 @@ impl Tool {
             Tool::Ffmpeg => "FFmpeg (ses/video)",
             Tool::LibreOffice => "LibreOffice (belge)",
             Tool::Pandoc => "Pandoc (belge)",
-            Tool::SevenZip => "7-Zip (arşiv)",
         }
     }
 

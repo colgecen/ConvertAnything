@@ -31,7 +31,7 @@ src/
 │   ├── image.rs       # image crate
 │   ├── av.rs          # FFmpeg çağrıları
 │   ├── document.rs    # soffice/pandoc çağrıları
-│   └── archive.rs     # 7z/zip (opsiyonel)
+│   └── archive.rs     # zip/tar(.gz) + güvenli ayıklama
 ├── state/
 │   └── config.rs      # config.toml okuma/yazma, setup_done bayrağı
 └── util/
