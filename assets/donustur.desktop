@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Dönüştür
+Name[en]=Donustur
+GenericName=Dosya Dönüştürücü
+GenericName[en]=File Converter
+Comment=Görsel, ses, video, belge ve arşiv dönüştürücü
+Comment[en]=Image, audio, video, document and archive converter
+Exec=donustur
+Icon=donustur
+Terminal=false
+Type=Application
+Categories=Utility;Office;Graphics;AudioVideo;
+Keywords=convert;donustur;image;video;audio;document;arsiv;
+StartupWMClass=donustur

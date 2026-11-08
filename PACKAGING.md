@@ -1,4 +1,4 @@
-# APPİMAGE PAKETLEME REHBERİ
+# APPIMAGE PAKETLEME REHBERİ
 
 ## Neden AppImage
 - Tek indirilebilir dosya, kurulum gerektirmez
@@ -14,14 +14,17 @@ cargo build --release
 strip target/release/donustur   # sembolleri sil
 ```
 
-Önerilen `Cargo.toml` release profili (bkz. ARCHITECTURE):
-```toml
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
+Release profili `Cargo.toml` içinde tanımlıdır (opt-level z, LTO, strip).
+Tek komutla AppImage üretmek için:
+
+```bash
+./scripts/package-appimage.sh            # sürüm Cargo.toml'dan okunur
+./scripts/package-appimage.sh 0.1.0      # sürümü elle ver
 ```
+
+Betik ilk çalıştırmada `linuxdeploy` ve `appimagetool` araçlarını `.tools/`
+dizinine indirir (yalnızca derleme zamanında ağ kullanılır), `AppDir` oluşturur
+ve `dist/Donustur-<sürüm>-x86_64.AppImage` dosyasını üretir.
 
 ## AppImage dizin yapısı
 ```
@@ -30,37 +33,51 @@ AppDir/
 ├── donustur.desktop
 ├── donustur.png
 └── usr/
-    └── bin/
-        └── donustur
+    ├── bin/
+    │   └── donustur
+    └── share/
+        ├── applications/donustur.desktop
+        └── icons/hicolor/256x256/apps/donustur.png
 ```
 
-donustur.desktop:
+`assets/donustur.desktop`:
 ```ini
 [Desktop Entry]
-Name=Donustur
+Name=Dönüştür
 Exec=donustur
 Icon=donustur
 Type=Application
-Categories=Utility;
-Comment=Dosya dönüştürücü
+Categories=Utility;Office;Graphics;AudioVideo;
+Comment=Görsel, ses, video, belge ve arşiv dönüştürücü
 ```
 
-## Paketleme
+Simge `assets/generate-icon.py` (Pillow) ile üretilir; PNG depoda hazır tutulur.
+
+## Elle paketleme
 ```bash
-wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-chmod +x linuxdeploy-x86_64.AppImage
-./linuxdeploy-x86_64.AppImage --appdir AppDir -e target/release/donustur -i donustur.png -d donustur.desktop --output appimage
+curl -fL -o linuxdeploy-x86_64.AppImage \
+  https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+curl -fL -o appimagetool-x86_64.AppImage \
+  https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+chmod +x linuxdeploy-x86_64.AppImage appimagetool-x86_64.AppImage
+
+APPIMAGE_EXTRACT_AND_RUN=1 ./linuxdeploy-x86_64.AppImage \
+  --appdir AppDir -e target/release/donustur \
+  -i assets/donustur.png -d assets/donustur.desktop
+APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool-x86_64.AppImage AppDir dist/Donustur.AppImage
 ```
 
-## CI (GitHub Actions özeti)
-1. `ubuntu-latest` üzerinde `cargo build --release`
-2. linuxdeploy ile AppImage üret
-3. Artifact olarak yayınla; tag'de Release'e ekle
+## CI (GitHub Actions)
+- `ci.yml`: her push/PR'da `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, release derlemesi
+- `release.yml`: `v*` etiketinde AppImage üretir, artifact ve GitHub Release'e ekler
+- Paketleme `ubuntu-22.04` üzerinde yapılır; daha eski glibc sayesinde
+  yeni dağıtımlarda da çalışır
 
 ## Wayland notları
 - eframe/winit Wayland'i native destekler; XWayland gerekmez
-- AppImage içinde libwayland-client gerekmez (sistemden yüklenir); 
-  statik link `x11` özelliğini kapatmayı gerektirebilir: `eframe` default özelliklerinde Wayland etkin tutulur
+- AppImage içinde libwayland-client gerekmez (sistemden yüklenir)
+- `eframe` özelliklerinde hem `wayland` hem `x11` açık tutulur
 
 ## Sınır: AppImage güncelleme
-AppImage güncellemesi uygulama içinden yapılmaz; yeni sürüm GitHub Release'den indirilir. (Otomatik güncelleyici ürün kararıdır; AGENTS.md yasağına dikkat.)
+AppImage güncellemesi uygulama içinden yapılmaz; yeni sürüm GitHub Release'den indirilir.
+(Otomatik güncelleyici ürün kararıdır; AGENTS.md yasağına dikkat.)

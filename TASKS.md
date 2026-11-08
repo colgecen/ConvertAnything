@@ -34,14 +34,14 @@
 ## Milestone 5 — Arşiv (opsiyonel, 1 hafta) — TAMAM
 - [x] zip/tar.gz oluşturma ve açma (zip bomb koruması ile)
 
-## Milestone 6 — Paketleme (1 hafta) → PACKAGING.md
-- [ ] linuxdeploy + appimagetool ile AppImage
-- [ ] .desktop dosyası + ikon
-- [ ] GitHub Release CI (x86_64)
+## Milestone 6 — Paketleme (1 hafta) → PACKAGING.md — TAMAM
+- [x] linuxdeploy + appimagetool ile AppImage
+- [x] .desktop dosyası + ikon
+- [x] GitHub Release CI (x86_64)
 
 ## Güvenlik denetimi (her milestone sonu)
-- [ ] SECURITY.md kontrol listesi gözden geçirilir
-- [ ] cargo audit
+- [x] SECURITY.md kontrol listesi gözden geçirilir
+- [x] cargo audit (CI: rustsec/audit-check)
 - [x] Zip bomb / path traversal / argüman enjeksiyonu testleri
 
 ## V2 fikirleri (şimdilik yapma)

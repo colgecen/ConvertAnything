@@ -35,7 +35,12 @@ src/
 ├── state/
 │   └── config.rs      # config.toml okuma/yazma, setup_done bayrağı
 └── util/
-    └── paths.rs       # XDG dizinleri, geçici dosya yönetimi
+    ├── paths.rs       # XDG dizinleri, güvenli çıktı adları, çakışma çözümü
+    └── process.rs     # güvenli Command, env temizliği, zaman aşımı, stderr
+
+assets/                # donustur.desktop, donustur.png, ikon üretici
+scripts/               # AppImage paketleme betiği
+.github/workflows/     # CI ve Release (AppImage) iş akışları
 ```
 
 ## Akışlar
@@ -52,11 +57,13 @@ src/
 
 ### Dönüşüm
 1. Kullanıcı dosyaları sürükler → `registry.rs` kaynak formatı tanır
-2. Hedef format seçilir → destek matrisinden doğrulanır
-3. `job.rs` kuyruğa iş ekler; tokio ile paralel çalışır
-4. İlgili converter harici aracı `Command` ile çağırır
-5. İlerleme stderr parse ile güncellenir; sonuç bildirimi gösterilir
-6. Geçici dosyalar `~/.cache/donustur/tmp` altında, iş bitince silinir
+2. Hedef format seçilir → destek matrisinden ve kurulu araçlardan doğrulanır
+3. `job.rs` kuyruğa iş ekler; tokio semaforu ile sınırlı paralellikte çalışır
+4. İlgili converter harici aracı `util/process.rs` üzerinden kabuksuz çağırır
+5. İlerleme stderr/`-progress` parse ile güncellenir; sonuç bildirimi gösterilir
+6. Çıktı önce geçici dosyaya yazılır, sonra `create_new` ile ayrılmış nihai
+   yola taşınır; mevcut dosya asla ezilmez
+7. Geçici dizinler `~/.cache/donustur/tmp` altında, iş bitince (hata dahil) silinir
 
 ## Kritik ilkeler
 - **Araçlar asla gömülmez** — Command ile çağrılır; AppImage 10-20 MB kalır
