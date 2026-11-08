@@ -1,0 +1,59 @@
+[package]
+name = "donustur"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+description = "Linux için çevrimdışı dosya dönüştürücü"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+anyhow = "1"
+eframe = { version = "0.37", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+egui = "0.37"
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "fs",
+    "process",
+    "time",
+    "io-util",
+] }
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+thiserror = "2"
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+    "png",
+    "webp",
+    "bmp",
+    "tiff",
+    "gif",
+    "ico",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rfd = "0.18"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+tempfile = "3"
+infer = "0.22"
+encoding_rs = "0.8"
+chardetng = "1"
+fs2 = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
