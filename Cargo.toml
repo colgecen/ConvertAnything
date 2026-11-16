@@ -3,9 +3,11 @@ name = "donustur"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.92"
-description = "Linux için çevrimdışı dosya dönüştürücü"
+description = "ConvertAnything: batch file converter for Linux desktops"
 license = "MIT"
 readme = "README.md"
+keywords = ["file-converter", "image-converter", "ffmpeg", "egui", "appimage"]
+categories = ["gui", "multimedia", "graphics"]
 
 [dependencies]
 anyhow = "1"

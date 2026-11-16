@@ -106,7 +106,7 @@ fn desktop_entry(exec: &Path) -> String {
          Icon=donustur\n\
          Terminal=false\n\
          Categories=Utility;Office;Graphics;AudioVideo;\n\
-         Keywords=convert;donustur;image;video;audio;document;archive;\n\
+         Keywords=convert;converter;donustur;image;photo;audio;video;document;pdf;archive;zip;ffmpeg;offline;\n\
          StartupWMClass=donustur\n",
         exec_quote(exec),
         mime_list()

@@ -11,5 +11,5 @@ Icon=donustur
 Terminal=false
 Type=Application
 Categories=Utility;Office;Graphics;AudioVideo;
-Keywords=convert;donustur;image;video;audio;document;archive;
+Keywords=convert;converter;donustur;image;photo;audio;video;document;pdf;archive;zip;ffmpeg;offline;
 StartupWMClass=donustur

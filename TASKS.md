@@ -60,6 +60,7 @@
 - [x] `~/.config/autostart/donustur.desktop` ile oturum açılışında başlatma
 - [x] Ayarlar → Sistem entegrasyonu: kurulum ve otomatik başlatma anahtarı
 - [x] İndirilen AppImage ilk açılışta kendini otomatik kurar ve oturum açılışına ekler
+- [x] GitHub açıklaması (İngilizce, ≤67 karakter) ve topic etiketleri; Cargo anahtar kelimeleri
 - [x] `--uninstall`: uygulama, menüler ve otomatik başlatma kaydını temizler
 
 ## Güvenlik denetimi (her milestone sonu)
