@@ -211,16 +211,26 @@ fn headless_convert(paths: &[PathBuf], config: &Config, target_id: &str) -> anyh
     Ok(done)
 }
 
-/// Best-effort desktop notification; silently ignored when unavailable.
+/// Best-effort desktop notification.
+///
+/// `notify-send` can block on a broken notification service and, when launched
+/// from an AppImage, keep the FUSE mount alive. A transient user unit gives it
+/// its own process without inheriting the AppImage file descriptors.
 fn desktop_notify(summary: &str, body: &str, error: bool) {
     use std::process::Stdio;
-    let mut command = std::process::Command::new("notify-send");
-    command.arg("--app-name").arg("ConvertAnything");
+    let mut command = std::process::Command::new("systemd-run");
+    command
+        .arg("--user")
+        .arg("--collect")
+        .arg("--no-block")
+        .arg("--quiet")
+        .arg("notify-send")
+        .arg("--app-name")
+        .arg("ConvertAnything");
     if error {
         command.arg("--urgency").arg("critical");
     }
     command.arg(summary).arg(body);
-    // Never block the conversion on a missing/stalled notification daemon.
     let _ = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
