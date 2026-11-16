@@ -5,6 +5,7 @@ mod app;
 mod converters;
 mod core;
 mod i18n;
+mod install;
 mod integration;
 mod state;
 mod ui;
@@ -28,6 +29,8 @@ struct Cli {
     paths: Vec<PathBuf>,
     target: Option<String>,
     quick: bool,
+    install_app: bool,
+    uninstall_app: bool,
     install_integration: bool,
     help: bool,
     version: bool,
@@ -53,6 +56,13 @@ fn main() -> eframe::Result<()> {
     }
     // Remove leftovers from a previous crash.
     util::paths::clean_tmp_dir();
+
+    if cli.install_app {
+        return run_install();
+    }
+    if cli.uninstall_app {
+        return run_uninstall();
+    }
 
     if cli.install_integration {
         match integration::ensure_installed() {
@@ -101,6 +111,58 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| Ok(Box::new(app::DonusturApp::new(cc, config, cli.paths)))),
     )
+}
+
+/// Installs the app for the current user and enables login autostart.
+fn run_install() -> eframe::Result<()> {
+    match install::install_app(true) {
+        Ok(report) => {
+            println!(
+                "{} {}",
+                t("Installed:", "Kuruldu:"),
+                report.executable.display()
+            );
+            println!(
+                "{} {}",
+                t("Context menus:", "Sağ tık menüleri:"),
+                report.service_menus
+            );
+            if let Some(autostart) = report.autostart {
+                println!(
+                    "{} {}",
+                    t("Autostart:", "Otomatik başlatma:"),
+                    autostart.display()
+                );
+            }
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("{} {error:#}", t("Install failed:", "Kurulum başarısız:"));
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_uninstall() -> eframe::Result<()> {
+    match install::uninstall() {
+        Ok(()) => {
+            println!(
+                "{}",
+                t(
+                    "ConvertAnything was removed from this user account.",
+                    "ConvertAnything bu kullanıcı hesabından kaldırıldı."
+                )
+            );
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!(
+                "{} {error:#}",
+                t("Uninstall failed:", "Kaldırma başarısız:")
+            );
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Converts immediately without opening a window. Used by the file-manager
@@ -295,6 +357,8 @@ fn parse_args() -> Cli {
                 }
             }
             "--install-integration" => cli.install_integration = true,
+            "--install" => cli.install_app = true,
+            "--uninstall" => cli.uninstall_app = true,
             "--help" | "-h" => cli.help = true,
             "--version" | "-V" => cli.version = true,
             _ if !text.starts_with('-') => cli.paths.push(PathBuf::from(arg)),
@@ -306,7 +370,7 @@ fn parse_args() -> Cli {
 
 fn print_help() {
     println!(
-        "ConvertAnything {}\n\n{}\n  donustur [FILES…]          {}\n  donustur --convert FILES… [--to FORMAT]\n  donustur --install-integration\n\n{}\n  --convert FILES…        {}\n  --to FORMAT             {}\n  --install-integration   {}\n  -h, --help              {}\n  -V, --version           {}",
+        "ConvertAnything {}\n\n{}\n  donustur [FILES…]          {}\n  donustur --convert FILES… [--to FORMAT]\n  donustur --install | --uninstall\n\n{}\n  --convert FILES…        {}\n  --to FORMAT             {}\n  --install               {}\n  --uninstall             {}\n  --install-integration   {}\n  -h, --help              {}\n  -V, --version           {}",
         env!("CARGO_PKG_VERSION"),
         t("Usage:", "Kullanım:"),
         t(
@@ -323,8 +387,16 @@ fn print_help() {
             "doğrudan bu biçime dönüştür (örn. png)"
         ),
         t(
-            "install the file manager context menu",
-            "dosya yöneticisi sağ tık menüsünü kurar"
+            "install to ~/.local/bin, add context menus and enable login autostart",
+            "~/.local/bin'e kur, sağ tık menülerini ekle ve oturum açılışında başlat"
+        ),
+        t(
+            "remove the installed app, menus and autostart entry",
+            "kurulu uygulamayı, menüleri ve otomatik başlatmayı kaldır"
+        ),
+        t(
+            "only install the file manager context menu",
+            "yalnızca dosya yöneticisi sağ tık menüsünü kur"
         ),
         t("show this help", "bu yardımı gösterir"),
         t("show the version", "sürümü gösterir"),

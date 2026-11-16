@@ -54,6 +54,13 @@
 - [x] Kart tabanlı yeni tema, yapışkan dönüştür çubuğu, tür rozetleri
 - [x] CLI: `donustur DOSYALAR`, `--convert`, `--to`, `--install-integration`
 
+## Milestone 9 — Kurulum ve oturum açılışı — TAMAM
+- [x] `--install`: AppImage'ı `~/.local/bin/Donustur.AppImage` konumuna kopyalar
+- [x] Masaüstü girdisi, simge ve sağ tık menülerini kurulu kopyaya yönlendirir
+- [x] `~/.config/autostart/donustur.desktop` ile oturum açılışında başlatma
+- [x] Ayarlar → Sistem entegrasyonu: kurulum ve otomatik başlatma anahtarı
+- [x] `--uninstall`: uygulama, menüler ve otomatik başlatma kaydını temizler
+
 ## Güvenlik denetimi (her milestone sonu)
 - [x] SECURITY.md kontrol listesi gözden geçirilir
 - [x] cargo audit (CI: rustsec/audit-check)
@@ -69,7 +76,8 @@
 - M6: `scripts/package-appimage.sh` üretimi 4.6 MB AppImage olarak doğrulandı (hedef 10-20 MB'ın altında).
 - M7: Tek ekranda karışık dosyalar; hedef listesi tüm dosyaların desteklediği biçimlerin kesişimidir. Arşive paketleme/ayıklama medya araçları gerektirmez.
 - M8: Sağ tık menüleri MIME başına üretilir ve 0755 izniyle yazılır (KIO aksi hâlde reddeder). `--to` verilen çağrılar pencere açmadan çalışır; bildirim `notify-send` ile en iyi çaba esaslıdır.
-- Test: 104 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
+- M9: Kurulum `~/.local/bin/Donustur.AppImage` hedefini kullanır; menüler ve otomatik başlatma bu kalıcı yola bağlanır. Kurulu kopya varsa uygulama menüleri tekrar geçici yola çevirmez.
+- Test: 107 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
 
 ## V2 fikirleri (şimdilik yapma)
 - Toplu önizleme, format öneri motoru, sağ tık menüsü entegrasyonu (Nautilus/Dolphin), arşiv desteği genişletme

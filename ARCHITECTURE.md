@@ -18,6 +18,7 @@ src/
 ├── main.rs            # Giriş noktası, CLI, eframe/headless başlatma
 ├── app.rs             # Uygulama durumu (egui App trait)
 ├── i18n.rs            # Türkçe/İngilizce, sistem dilini algılama
+├── install.rs         # Kullanıcı kurulumu, oturum açılışı, kaldırma
 ├── integration.rs     # .desktop + KDE servis menüsü kurulumu
 ├── ui/
 │   ├── mod.rs         # Ekran yönlendirme
@@ -71,9 +72,17 @@ scripts/               # AppImage paketleme betiği
 
 ### Sağ tık menüsü (KDE)
 1. Uygulama açılışta `integration.rs` ile `~/.local/share` altına masaüstü girdisini, simgeyi ve MIME başına servis menülerini yazar (idempotent).
-2. Menüler kullanıcı tarafından çalıştırılabilir (0755) olur; aksi hâlde KIO erişimi reddeder.
-3. Dosyanın MIME türüne göre yalnızca desteklenen hedefler listelenir; örneğin PNG menüsünde JPEG, WebP, BMP, TIFF, GIF, ICO, ZIP ve TAR.GZ bulunur.
-4. Seçim, `donustur --convert %F --to FORMAT` çağırır. Bu yol **pencere açmaz**: dönüşüm arka planda yapılır, sonuçta masaüstü bildirimi gönderilir.
+2. Kurulu kopya varsa (`~/.local/bin/Donustur.AppImage`) menüler ona yönlendirilir; geçici AppImage yoluna geri dönülmez.
+3. Menüler kullanıcı tarafından çalıştırılabilir (0755) olur; aksi hâlde KIO erişimi reddeder.
+4. Dosyanın MIME türüne göre yalnızca desteklenen hedefler listelenir; örneğin PNG menüsünde JPEG, WebP, BMP, TIFF, GIF, ICO, ZIP ve TAR.GZ bulunur.
+5. Seçim, `donustur --convert %F --to FORMAT` çağırır. Bu yol **pencere açmaz**: dönüşüm arka planda yapılır, sonuçta masaüstü bildirimi gönderilir.
+
+### Kurulum ve oturum açılışı
+1. `--install`, çalışan AppImage'ı `~/.local/bin/Donustur.AppImage` konumuna atomik olarak kopyalar (0755).
+2. Masaüstü girdisi, simge ve servis menüleri bu kalıcı kopyaya bağlanır.
+3. `~/.config/autostart/donustur.desktop` yazılarak oturum açılışında başlatma etkinleştirilir.
+4. Ayarlar → Sistem entegrasyonu aynı işlemleri ve otomatik başlatma anahtarını sunar.
+5. `--uninstall` kopyayı, menüleri ve otomatik başlatma kaydını siler.
 
 ### Dil
 - `config.toml` içindeki `language` değeri `auto`, `tr` veya `en` olabilir.

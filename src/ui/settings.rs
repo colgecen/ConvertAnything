@@ -4,6 +4,7 @@ use egui::RichText;
 
 use crate::core::detector::{PackageManager, ToolStatus};
 use crate::i18n::t;
+use crate::install;
 use crate::state::config::Config;
 use crate::ui::theme;
 
@@ -13,11 +14,14 @@ pub enum SettingsAction {
     Save(Config),
     RerunWizard,
     InstallIntegration,
+    InstallApp,
+    SetAutostart(bool),
 }
 
 pub struct SettingsView {
     pub draft: Config,
     pub dirty: bool,
+    pub autostart: bool,
 }
 
 impl SettingsView {
@@ -25,6 +29,7 @@ impl SettingsView {
         Self {
             draft: config.clone(),
             dirty: false,
+            autostart: install::autostart_enabled(),
         }
     }
 
@@ -65,6 +70,8 @@ impl SettingsView {
                 self.card_defaults(ui);
                 ui.add_space(12.0);
                 self.card_tools(ui, tools, manager, &mut action);
+                ui.add_space(12.0);
+                self.card_system(ui, &mut action);
                 ui.add_space(16.0);
 
                 ui.horizontal(|ui| {
@@ -388,21 +395,92 @@ impl SettingsView {
                 },
             );
             ui.add_space(8.0);
+            if ui
+                .button(t(
+                    "Run setup wizard again",
+                    "Kurulum sihirbazını yeniden çalıştır",
+                ))
+                .clicked()
+            {
+                *action = SettingsAction::RerunWizard;
+            }
+        });
+    }
+
+    fn card_system(&mut self, ui: &mut egui::Ui, action: &mut SettingsAction) {
+        theme::card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            theme::section(ui, t("System integration", "Sistem entegrasyonu"));
+            match install::installed_executable() {
+                Some(path) => {
+                    ui.horizontal(|ui| {
+                        theme::dot(ui, theme::SUCCESS);
+                        ui.label(
+                            RichText::new(t("App installed", "Uygulama kurulu"))
+                                .small()
+                                .strong()
+                                .color(theme::SUCCESS),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(path.display().to_string())
+                                    .small()
+                                    .color(theme::MUTED),
+                            )
+                            .truncate(),
+                        );
+                    });
+                }
+                None => {
+                    theme::hint(
+                        ui,
+                        t(
+                            "Not installed yet; the app runs from its current location.",
+                            "Henüz kurulmadı; uygulama bulunduğu konumdan çalışıyor.",
+                        ),
+                    );
+                }
+            }
+            ui.add_space(8.0);
+
+            let mut autostart = self.autostart;
+            if ui
+                .checkbox(
+                    &mut autostart,
+                    t("Start with the session", "Oturum açılışında başlat"),
+                )
+                .changed()
+            {
+                self.autostart = autostart;
+                *action = SettingsAction::SetAutostart(autostart);
+            }
+            theme::hint(
+                ui,
+                t(
+                    "The app opens automatically after you log in.",
+                    "Oturum açtığınızda uygulama kendiliğinden açılır.",
+                ),
+            );
+
+            ui.add_space(10.0);
             ui.horizontal(|ui| {
-                if ui
-                    .button(t("Run setup wizard again", "Kurulum sihirbazını yeniden çalıştır"))
-                    .clicked()
+                if theme::accent_button(
+                    ui,
+                    t("Install app", "Uygulamayı kur"),
+                    egui::vec2(140.0, 32.0),
+                )
+                .on_hover_text(t(
+                    "Copies the AppImage to ~/.local/bin, registers the context menu and enables login autostart.",
+                    "AppImage'ı ~/.local/bin'e kopyalar, sağ tık menüsünü kurar ve oturum açılışında başlatmayı açar.",
+                ))
+                .clicked()
                 {
-                    *action = SettingsAction::RerunWizard;
+                    *action = SettingsAction::InstallApp;
                 }
                 if ui
                     .button(t(
-                        "Add file manager context menu",
-                        "Dosya yöneticisi sağ tık menüsünü ekle",
-                    ))
-                    .on_hover_text(t(
-                        "Installs the KDE service menu and desktop entry for the current user.",
-                        "KDE servis menüsünü ve masaüstü girdisini yalnızca mevcut kullanıcı için kurar.",
+                        "Repair context menu",
+                        "Sağ tık menüsünü onar",
                     ))
                     .clicked()
                 {

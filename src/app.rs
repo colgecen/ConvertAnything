@@ -10,6 +10,7 @@ use crate::converters::ConvertOptions;
 use crate::core::detector::{self, PackageManager, ToolStatus};
 use crate::core::job::{self, BatchItem, JobRunner, JobStatus};
 use crate::i18n::t;
+use crate::install;
 use crate::integration;
 use crate::state::config::Config;
 use crate::ui::convert_view::ConvertView;
@@ -64,7 +65,11 @@ impl DonusturApp {
         }
 
         // Register the file-manager integration (idempotent, user data dir only).
-        if let Err(error) = integration::ensure_installed() {
+        // When the app was installed to ~/.local/bin, keep the menus pointing
+        // there even if this session was started from another copy.
+        let menu_exec =
+            install::installed_executable().unwrap_or_else(integration::executable_path);
+        if let Err(error) = integration::ensure_installed_for(&menu_exec) {
             tracing::warn!("dosya yöneticisi menüsü kurulamadı: {error:#}");
         }
 
@@ -435,6 +440,59 @@ impl DonusturApp {
                         t(
                             "Context menu could not be installed:",
                             "Sağ tık menüsü kurulamadı:"
+                        )
+                    ),
+                    true,
+                ),
+            },
+            SettingsAction::InstallApp => match install::install_app(true) {
+                Ok(report) => {
+                    self.settings.autostart = true;
+                    self.notify(
+                        format!(
+                            "{} {} ({} {})",
+                            t("App installed:", "Uygulama kuruldu:"),
+                            report.executable.display(),
+                            report.service_menus,
+                            t("menus", "menü")
+                        ),
+                        false,
+                    );
+                }
+                Err(error) => self.notify(
+                    format!("{} {error:#}", t("Install failed:", "Kurulum başarısız:")),
+                    true,
+                ),
+            },
+            SettingsAction::SetAutostart(enabled) => match install::set_autostart(enabled) {
+                Ok(path) => {
+                    self.settings.autostart = enabled;
+                    self.notify(
+                        if enabled {
+                            format!(
+                                "{} {}",
+                                t(
+                                    "Login autostart enabled:",
+                                    "Oturum açılışında başlatma açıldı:"
+                                ),
+                                path.display()
+                            )
+                        } else {
+                            t(
+                                "Login autostart disabled.",
+                                "Oturum açılışında başlatma kapatıldı.",
+                            )
+                            .to_string()
+                        },
+                        false,
+                    );
+                }
+                Err(error) => self.notify(
+                    format!(
+                        "{} {error:#}",
+                        t(
+                            "Autostart could not be changed:",
+                            "Otomatik başlatma değiştirilemedi:"
                         )
                     ),
                     true,

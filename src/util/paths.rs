@@ -22,7 +22,32 @@ fn xdg_dir(var: &str, fallback: &str) -> PathBuf {
 
 /// `$XDG_CONFIG_HOME/donustur` (defaults to `~/.config/donustur`).
 pub fn config_dir() -> PathBuf {
-    xdg_dir("XDG_CONFIG_HOME", ".config").join(APP_DIR)
+    config_home().join(APP_DIR)
+}
+
+/// `$XDG_CONFIG_HOME` (defaults to `~/.config`).
+pub fn config_home() -> PathBuf {
+    xdg_dir("XDG_CONFIG_HOME", ".config")
+}
+
+/// `$XDG_DATA_HOME` (defaults to `~/.local/share`).
+pub fn data_home() -> PathBuf {
+    xdg_dir("XDG_DATA_HOME", ".local/share")
+}
+
+/// User binary directory used by the installer (`~/.local/bin`).
+pub fn bin_dir() -> PathBuf {
+    home_dir().join(".local/bin")
+}
+
+/// Autostart directory (`$XDG_CONFIG_HOME/autostart`).
+pub fn autostart_dir() -> PathBuf {
+    config_home().join("autostart")
+}
+
+/// Autostart desktop entry for the application.
+pub fn autostart_file() -> PathBuf {
+    autostart_dir().join("donustur.desktop")
 }
 
 /// `$XDG_CACHE_HOME/donustur` (defaults to `~/.cache/donustur`).

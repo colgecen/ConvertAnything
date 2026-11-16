@@ -287,15 +287,7 @@ fn refresh_file_manager_cache() {
 
 /// The real XDG data home (respects `XDG_DATA_HOME`).
 pub fn data_home() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .unwrap_or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".local/share")
-        })
+    paths::data_home()
 }
 
 /// True when every expected service menu exists and is up to date.
@@ -316,20 +308,24 @@ pub fn is_installed_for(exec: &Path, data_home: &Path) -> bool {
 
 /// Installs/refreshes the context menu. Safe to call on every startup.
 pub fn ensure_installed() -> Result<Installed> {
+    ensure_installed_for(&executable_path())
+}
+
+/// Installs/refreshes the context menu for a specific executable.
+pub fn ensure_installed_for(exec: &Path) -> Result<Installed> {
     let data = data_home();
-    let exec = executable_path();
-    if is_installed_for(&exec, &data) {
+    if is_installed_for(exec, &data) {
         let servicemenus = data.join("kio/servicemenus");
         return Ok(Installed {
             desktop: data.join("applications/donustur.desktop"),
-            service_menus: service_menus(&exec)
+            service_menus: service_menus(exec)
                 .into_iter()
                 .map(|(name, _)| servicemenus.join(name))
                 .collect(),
             icon: data.join("icons/hicolor/256x256/apps/donustur.png"),
         });
     }
-    install_to(&data, &exec)
+    install_to(&data, exec)
 }
 
 /// Checks every registry format has a MIME mapping; used by tests and debug builds.

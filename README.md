@@ -33,14 +33,30 @@ Uygulama boyutunu 10-20 MB'ta tutmak için motorlar sistem paketidir.
 kurar (bir kez, yalnızca sabit paket adlarıyla). Sonrasında uygulama araçları
 `std::process::Command` ile **kabuk kullanmadan** çağırır.
 
+## Kurulum
+AppImage'ı indirdikten sonra tek komutla kullanıcı hesabına kur:
+
+```bash
+chmod +x Donustur-*.AppImage
+./Donustur-*.AppImage --install
+```
+
+Bu komut:
+- AppImage'ı `~/.local/bin/Donustur.AppImage` konumuna kopyalar,
+- masaüstü girdisini, simgeyi ve sağ tık menülerini kurar,
+- oturum açılışında otomatik başlatmayı etkinleştirir (`~/.config/autostart/donustur.desktop`).
+
+Kaldırmak için:
+```bash
+~/.local/bin/Donustur.AppImage --uninstall
+```
+
+Kurulumu ve otomatik başlatmayı arayüzden de yönetebilirsin:
+**Ayarlar → Sistem entegrasyonu**.
+
 ## Çalıştırma
 ```bash
 cargo run --release
-```
-
-Sağ tık menüsünü yeniden kurmak veya denetlemek için:
-```bash
-./Donustur-*.AppImage --install-integration
 ```
 
 Kullanım:
@@ -48,6 +64,7 @@ Kullanım:
 donustur [DOSYALAR…]                  # ana ekranı dosyalarla aç
 donustur --convert DOSYALAR…          # hedef biçim seçiciyi aç
 donustur --convert DOSYALAR… --to png # pencere açmadan dönüştür
+donustur --install                    # kur + oturum açılışında başlat
 ```
 
 Geliştirme için:
