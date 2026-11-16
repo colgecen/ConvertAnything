@@ -226,7 +226,9 @@ fn desktop_notify(summary: &str, body: &str, error: bool) {
         .arg("--quiet")
         .arg("notify-send")
         .arg("--app-name")
-        .arg("ConvertAnything");
+        .arg("ConvertAnything")
+        .arg("--icon")
+        .arg("donustur");
     if error {
         command.arg("--urgency").arg("critical");
     }

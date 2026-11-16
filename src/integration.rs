@@ -274,7 +274,12 @@ fn refresh_file_manager_cache() {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn();
-        if spawned.is_ok() {
+        if let Ok(mut child) = spawned {
+            // Reap the helper so it does not stay as a zombie for the app's
+            // whole lifetime.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
             return;
         }
     }
