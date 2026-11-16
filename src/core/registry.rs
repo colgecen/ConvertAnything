@@ -7,6 +7,8 @@ use std::path::Path;
 
 use anyhow::{bail, Result};
 
+use crate::i18n::t;
+
 /// Broad category of a file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MediaKind {
@@ -20,11 +22,11 @@ pub enum MediaKind {
 impl MediaKind {
     pub fn label(self) -> &'static str {
         match self {
-            MediaKind::Image => "Görsel",
-            MediaKind::Audio => "Ses",
-            MediaKind::Video => "Video",
-            MediaKind::Document => "Belge",
-            MediaKind::Archive => "Arşiv",
+            MediaKind::Image => t("Image", "Görsel"),
+            MediaKind::Audio => t("Audio", "Ses"),
+            MediaKind::Video => t("Video", "Video"),
+            MediaKind::Document => t("Document", "Belge"),
+            MediaKind::Archive => t("Archive", "Arşiv"),
         }
     }
 }
@@ -37,6 +39,18 @@ pub struct Format {
     pub kind: MediaKind,
     /// Extra extensions that map to this format.
     pub aliases: &'static [&'static str],
+}
+
+impl Format {
+    /// Localised label used by the UI.
+    pub fn display_label(&self) -> &'static str {
+        match self.id {
+            "txt" => t("Text", "Metin"),
+            "docx" => t("Word document", "Word belgesi"),
+            "odt" => t("OpenDocument", "OpenDocument"),
+            _ => self.label,
+        }
+    }
 }
 
 pub const FORMATS: &[Format] = &[

@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::i18n::t;
+
 /// External conversion engines. They are never bundled with the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tool {
@@ -29,9 +31,9 @@ impl Tool {
 
     pub fn display_name(self) -> &'static str {
         match self {
-            Tool::Ffmpeg => "FFmpeg (ses/video)",
-            Tool::LibreOffice => "LibreOffice (belge)",
-            Tool::Pandoc => "Pandoc (belge)",
+            Tool::Ffmpeg => t("FFmpeg (audio/video)", "FFmpeg (ses/video)"),
+            Tool::LibreOffice => t("LibreOffice (documents)", "LibreOffice (belge)"),
+            Tool::Pandoc => t("Pandoc (documents)", "Pandoc (belge)"),
         }
     }
 

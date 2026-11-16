@@ -15,12 +15,16 @@
 ## Modül yapısı
 ```
 src/
-├── main.rs            # Giriş noktası, eframe başlatma
+├── main.rs            # Giriş noktası, CLI, eframe/headless başlatma
 ├── app.rs             # Uygulama durumu (egui App trait)
+├── i18n.rs            # Türkçe/İngilizce, sistem dilini algılama
+├── integration.rs     # .desktop + KDE servis menüsü kurulumu
 ├── ui/
-│   ├── mod.rs         # Ana pencere, ekran yönlendirme
+│   ├── mod.rs         # Ekran yönlendirme
+│   ├── theme.rs       # Renkler, kartlar, düğme stilleri
 │   ├── setup_wizard.rs# İlk kurulum sihirbazı
 │   ├── convert_view.rs# Tek ekran: dosya listesi + ortak hedef + ilerleme
+│   ├── quick_convert.rs# CLI hedef seçici (pencere açmadan dönüşüm yolu)
 │   └── settings.rs    # Ayarlar
 ├── core/
 │   ├── detector.rs    # tool_exists(), paket yöneticisi tespiti
@@ -64,6 +68,17 @@ scripts/               # AppImage paketleme betiği
 6. Çıktı önce geçici dosyaya yazılır, sonra `create_new` ile ayrılmış nihai
    yola taşınır; mevcut dosya asla ezilmez
 7. Geçici dizinler `~/.cache/donustur/tmp` altında, iş bitince (hata dahil) silinir
+
+### Sağ tık menüsü (KDE)
+1. Uygulama açılışta `integration.rs` ile `~/.local/share` altına masaüstü girdisini, simgeyi ve MIME başına servis menülerini yazar (idempotent).
+2. Menüler kullanıcı tarafından çalıştırılabilir (0755) olur; aksi hâlde KIO erişimi reddeder.
+3. Dosyanın MIME türüne göre yalnızca desteklenen hedefler listelenir; örneğin PNG menüsünde JPEG, WebP, BMP, TIFF, GIF, ICO, ZIP ve TAR.GZ bulunur.
+4. Seçim, `donustur --convert %F --to FORMAT` çağırır. Bu yol **pencere açmaz**: dönüşüm arka planda yapılır, sonuçta masaüstü bildirimi gönderilir.
+
+### Dil
+- `config.toml` içindeki `language` değeri `auto`, `tr` veya `en` olabilir.
+- `auto` iken `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG` sırasıyla denenir; `tr*` Türkçe, `en*` İngilizce seçer.
+- Eski sürümlerden gelen `language = "tr"` değeri, kullanıcı Ayarlar'dan açıkça seçmediyse otomatik algılamaya taşınır.
 
 ## Kritik ilkeler
 - **Araçlar asla gömülmez** — Command ile çağrılır; AppImage 10-20 MB kalır

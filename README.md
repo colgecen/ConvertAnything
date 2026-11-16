@@ -16,6 +16,8 @@ dönüştürme uygulaması. Dağıtım: **AppImage** (~10-20 MB). Dönüşüm mo
 
 - Sürükle-bırak ve çoklu dosya; tek ekranda karışık türler
 - Toplu dönüşüm: hedef biçim listesi tüm dosyaların ortak desteklediği biçimlerden oluşur
+- KDE Dolphin sağ tık menüsü: dosyaya uygun hedefler listelenir, seçince pencere açılmadan dönüştürür
+- Türkçe/İngilizce arayüz; sistem dilini otomatik algılar
 - Tokio tabanlı paralel iş kuyruğu, canlı ilerleme
 - Çakışmada `-1`, `-2` ekleyerek **üzerine yazmama**
 - JPEG kalitesi, ses/video bit hızı ve çözünürlük seçenekleri
@@ -34,6 +36,18 @@ kurar (bir kez, yalnızca sabit paket adlarıyla). Sonrasında uygulama araçlar
 ## Çalıştırma
 ```bash
 cargo run --release
+```
+
+Sağ tık menüsünü yeniden kurmak veya denetlemek için:
+```bash
+./Donustur-*.AppImage --install-integration
+```
+
+Kullanım:
+```
+donustur [DOSYALAR…]                  # ana ekranı dosyalarla aç
+donustur --convert DOSYALAR…          # hedef biçim seçiciyi aç
+donustur --convert DOSYALAR… --to png # pencere açmadan dönüştür
 ```
 
 Geliştirme için:

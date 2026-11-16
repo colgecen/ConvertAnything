@@ -47,6 +47,13 @@
 - [x] Seçeneklerin yalnızca ilgili türlerde gösterilmesi
 - [x] Ayarlar ekranına başlıktan erişim
 
+## Milestone 8 — Masaüstü entegrasyonu ve dil — TAMAM
+- [x] KDE Dolphin sağ tık menüsü: MIME başına yalnızca uygun hedef biçimler
+- [x] Menüden seçimde pencere açmadan (headless) dönüşüm + masaüstü bildirimi
+- [x] Türkçe/İngilizce arayüz, `auto` sistem dili algılama ve eski ayar geçişi
+- [x] Kart tabanlı yeni tema, yapışkan dönüştür çubuğu, tür rozetleri
+- [x] CLI: `donustur DOSYALAR`, `--convert`, `--to`, `--install-integration`
+
 ## Güvenlik denetimi (her milestone sonu)
 - [x] SECURITY.md kontrol listesi gözden geçirilir
 - [x] cargo audit (CI: rustsec/audit-check)
@@ -61,7 +68,8 @@
 - M5: Zip bomb (oran + toplam boyut + girdi sayısı), path traversal ve symlink girdileri reddedilir.
 - M6: `scripts/package-appimage.sh` üretimi 4.6 MB AppImage olarak doğrulandı (hedef 10-20 MB'ın altında).
 - M7: Tek ekranda karışık dosyalar; hedef listesi tüm dosyaların desteklediği biçimlerin kesişimidir. Arşive paketleme/ayıklama medya araçları gerektirmez.
-- Test: 94 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
+- M8: Sağ tık menüleri MIME başına üretilir ve 0755 izniyle yazılır (KIO aksi hâlde reddeder). `--to` verilen çağrılar pencere açmadan çalışır; bildirim `notify-send` ile en iyi çaba esaslıdır.
+- Test: 104 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
 
 ## V2 fikirleri (şimdilik yapma)
 - Toplu önizleme, format öneri motoru, sağ tık menüsü entegrasyonu (Nautilus/Dolphin), arşiv desteği genişletme

@@ -38,8 +38,11 @@ pub struct Config {
     pub bitrate_kbps: Option<u32>,
     /// Default scale expression such as `1280:-2`. `None` keeps the source size.
     pub video_scale: Option<String>,
-    /// Preferred UI language. Only Turkish is shipped today.
+    /// Preferred UI language: `auto` (system), `tr` or `en`.
     pub language: String,
+    /// True when the language was chosen manually in Settings. Old configs
+    /// without this flag fall back to automatic detection.
+    pub language_explicit: bool,
 }
 
 impl Default for Config {
@@ -55,7 +58,8 @@ impl Default for Config {
             image_quality: 90,
             bitrate_kbps: None,
             video_scale: None,
-            language: "tr".to_string(),
+            language: "auto".to_string(),
+            language_explicit: false,
         }
     }
 }
@@ -124,7 +128,15 @@ impl Config {
             self.max_parallel_jobs = 64;
         }
         if self.language.trim().is_empty() {
-            self.language = "tr".to_string();
+            self.language = "auto".to_string();
+        }
+        self.language = self.language.trim().to_ascii_lowercase();
+        if !matches!(self.language.as_str(), "auto" | "tr" | "en") {
+            self.language = "auto".to_string();
+        }
+        if !self.language_explicit {
+            // Migrate configs written before automatic detection existed.
+            self.language = "auto".to_string();
         }
         // Only fixed, known tool identifiers may be skipped.
         self.skipped_tools
@@ -228,6 +240,31 @@ mod tests {
         assert_eq!(c.job_timeout_secs, DEFAULT_JOB_TIMEOUT_SECS);
         assert_eq!(c.skipped_tools, vec!["ffmpeg", "pandoc"]);
         assert_eq!(c.video_scale, None);
+    }
+
+    #[test]
+    fn normalise_accepts_only_known_languages() {
+        let mut c = Config {
+            language: "de".into(),
+            language_explicit: true,
+            ..Config::default()
+        };
+        c.normalise();
+        assert_eq!(c.language, "auto");
+        c.language = "EN".into();
+        c.normalise();
+        assert_eq!(c.language, "en");
+    }
+
+    #[test]
+    fn old_language_setting_migrates_to_auto() {
+        let mut c = Config {
+            language: "tr".into(),
+            language_explicit: false,
+            ..Config::default()
+        };
+        c.normalise();
+        assert_eq!(c.language, "auto");
     }
 
     #[test]

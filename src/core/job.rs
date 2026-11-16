@@ -4,7 +4,8 @@
 //! private Tokio runtime with a bounded level of parallelism. Every job gets a
 //! private temporary directory which is removed by `TempDir` even on failure.
 
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -123,6 +124,83 @@ impl JobRunner {
     pub fn try_recv(&self) -> Option<JobUpdate> {
         self.events.try_recv().ok()
     }
+}
+
+/// One source file in a batch submission.
+#[derive(Debug, Clone)]
+pub struct BatchItem {
+    pub path: PathBuf,
+    pub source: &'static Format,
+}
+
+/// Result of a batch submission; used by both the main and quick screens.
+#[derive(Debug, Clone)]
+pub struct SubmittedJob {
+    pub id: u64,
+    pub name: String,
+    pub target: String,
+    pub output: PathBuf,
+}
+
+/// Submits every item with a shared target and collision-free output names.
+pub fn submit_batch(
+    runner: &JobRunner,
+    items: &[BatchItem],
+    target_id: &str,
+    output_dir: Option<&Path>,
+    config: &Config,
+    options: &ConvertOptions,
+    taken: &mut HashSet<PathBuf>,
+) -> Vec<SubmittedJob> {
+    let mut submitted = Vec::with_capacity(items.len());
+    for item in items {
+        let out_dir = output_dir
+            .map(Path::to_path_buf)
+            .or_else(|| config.output_dir.clone())
+            .or_else(|| item.path.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."));
+        let stem = item
+            .path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("cikti")
+            .to_string();
+        // Extraction always gets a fresh directory; files only overwrite when
+        // the user explicitly enabled it in Settings.
+        let overwrite = config.allow_overwrite && target_id != registry::EXTRACT;
+        let output = if overwrite {
+            let ext = if target_id == registry::EXTRACT {
+                ""
+            } else {
+                target_id
+            };
+            paths::explicit_output_path(&out_dir, &stem, ext, taken)
+        } else if target_id == registry::EXTRACT {
+            paths::unique_output_path_reserved(&out_dir, &stem, "", taken)
+        } else {
+            paths::unique_output_path_reserved(&out_dir, &stem, target_id, taken)
+        };
+        let name = item
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| item.path.display().to_string());
+        let id = runner.submit(
+            item.path.clone(),
+            output.clone(),
+            item.source,
+            target_id.to_string(),
+            options.clone(),
+            overwrite,
+        );
+        submitted.push(SubmittedJob {
+            id,
+            name,
+            target: target_id.to_string(),
+            output,
+        });
+    }
+    submitted
 }
 
 async fn run_job(request: JobRequest, events: Sender<JobUpdate>) {

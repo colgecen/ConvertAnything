@@ -1,8 +1,10 @@
 //! egui views.
 
 pub mod convert_view;
+pub mod quick_convert;
 pub mod settings;
 pub mod setup_wizard;
+pub mod theme;
 
 /// Top level screens.
 ///

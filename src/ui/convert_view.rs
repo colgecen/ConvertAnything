@@ -6,17 +6,13 @@
 
 use std::path::PathBuf;
 
-use egui::{Color32, RichText, Stroke};
+use egui::{Color32, Margin, RichText, Stroke};
 
 use crate::converters::document;
 use crate::core::detector::{Tool, ToolStatus};
 use crate::core::registry::{self, Format, MediaKind};
-
-pub const ACCENT: Color32 = Color32::from_rgb(74, 144, 226);
-pub const SUCCESS: Color32 = Color32::from_rgb(76, 175, 120);
-pub const WARNING: Color32 = Color32::from_rgb(230, 168, 58);
-pub const DANGER: Color32 = Color32::from_rgb(226, 96, 76);
-pub const MUTED: Color32 = Color32::from_rgb(146, 152, 162);
+use crate::i18n::{self, t};
+use crate::ui::theme;
 
 /// One file in the shared queue.
 #[derive(Debug, Clone)]
@@ -89,17 +85,7 @@ impl ConvertView {
 
     /// Targets supported by every queued file and by the installed tools.
     pub fn available_targets(&self, tools: &[ToolStatus]) -> Vec<&'static Format> {
-        let Some(first) = self.files.first() else {
-            return Vec::new();
-        };
-        let mut targets = registry::targets_for(first.format);
-        targets.retain(|target| {
-            self.files.iter().all(|file| {
-                registry::is_supported(file.format, target.id)
-                    && target_allowed(tools, file.format, target)
-            })
-        });
-        targets
+        common_targets(&self.files, tools)
     }
 
     /// Renders the view. Returns true when the user asked to start conversion.
@@ -115,12 +101,11 @@ impl ConvertView {
         }
 
         self.show_toolbar(ui);
-        ui.add_space(10.0);
+        ui.add_space(12.0);
         self.show_file_list(ui);
         ui.add_space(12.0);
         self.show_options(ui, &targets);
-        ui.add_space(12.0);
-        self.show_actions(ui, &targets, tools)
+        false
     }
 
     fn sync_target(&mut self, targets: &[&'static Format]) {
@@ -140,236 +125,298 @@ impl ConvertView {
 
     fn show_empty_state(ui: &mut egui::Ui) -> bool {
         let mut picked = false;
-        card(ui, ACCENT.gamma_multiply(0.55), |ui| {
-            ui.set_width(ui.available_width());
-            ui.vertical_centered(|ui| {
-                ui.add_space(14.0);
-                drop_icon(ui, 52.0);
-                ui.add_space(2.0);
-                ui.label(
-                    RichText::new("Dosyalarınızı buraya bırakın")
-                        .size(21.0)
+        egui::Frame::default()
+            .fill(theme::BG_SOFT)
+            .stroke(Stroke::new(1.5, theme::ACCENT.gamma_multiply(0.45)))
+            .corner_radius(18)
+            .inner_margin(Margin::same(28))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.vertical_centered(|ui| {
+                    ui.add_space(18.0);
+                    drop_icon(ui, 74.0);
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(t(
+                            "Drop your files here",
+                            "Dosyalarınızı buraya bırakın",
+                        ))
+                        .size(23.0)
                         .strong(),
-                );
-                ui.label(
-                    RichText::new(
-                        "Görsel, ses, video, belge ve arşiv dosyalarını karışık olarak ekleyebilirsiniz.",
-                    )
-                    .color(MUTED),
-                );
-                ui.add_space(14.0);
-                if ui
-                    .add(
-                        egui::Button::new(
-                            RichText::new("Dosya seç…").strong().color(Color32::WHITE),
-                        )
-                        .fill(ACCENT)
-                        .min_size(egui::vec2(160.0, 36.0)),
+                    );
+                    ui.label(
+                        RichText::new(t(
+                            "Mix images, audio, video, documents and archives in one batch.",
+                            "Görsel, ses, video, belge ve arşiv dosyalarını tek listede karıştırabilirsiniz.",
+                        ))
+                        .color(theme::MUTED),
+                    );
+                    ui.add_space(18.0);
+                    if theme::primary_button(
+                        ui,
+                        t("Choose files…", "Dosya seç…"),
+                        egui::vec2(176.0, 40.0),
                     )
                     .clicked()
-                {
-                    picked = true;
+                    {
+                        picked = true;
+                    }
+                    ui.add_space(8.0);
+                    theme::hint(
+                        ui,
+                        t(
+                            "or drag and drop anywhere in this window",
+                            "veya dosyaları bu pencerenin herhangi bir yerine sürükleyin",
+                        ),
+                    );
+                    ui.add_space(18.0);
+                });
+            });
+
+        ui.add_space(14.0);
+        ui.vertical_centered(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(((ui.available_width() - 360.0) * 0.5).max(0.0));
+                for kind in [
+                    MediaKind::Image,
+                    MediaKind::Audio,
+                    MediaKind::Video,
+                    MediaKind::Document,
+                    MediaKind::Archive,
+                ] {
+                    kind_chip(ui, kind);
                 }
-                ui.add_space(14.0);
             });
         });
         picked
     }
 
     fn show_toolbar(&mut self, ui: &mut egui::Ui) {
-        card(
-            ui,
-            ui.visuals().widgets.noninteractive.bg_stroke.color,
-            |ui| {
-                ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(format!("{} dosya", self.files.len()))
-                            .size(16.0)
-                            .strong(),
-                    );
+        theme::flat_card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
                     ui.label(
                         RichText::new(format!(
-                            "{} tür · {}",
-                            self.kind_count(),
-                            human_size(self.total_size())
+                            "{} {}",
+                            self.files.len(),
+                            i18n::files_label(self.files.len())
                         ))
-                        .small()
-                        .color(MUTED),
+                        .size(17.0)
+                        .strong(),
                     );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Tümünü temizle").clicked() {
-                            self.clear();
-                        }
-                        if ui
-                            .add(
-                                egui::Button::new(RichText::new("+  Dosya ekle").strong())
-                                    .fill(ACCENT)
-                                    .min_size(egui::vec2(130.0, 30.0)),
-                            )
-                            .clicked()
-                        {
-                            self.pick_files();
-                        }
-                    });
+                    theme::hint(
+                        ui,
+                        format!(
+                            "{} {} · {}",
+                            self.kind_count(),
+                            i18n::types_label(self.kind_count()),
+                            human_size(self.total_size())
+                        ),
+                    );
                 });
-            },
-        );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(t("Clear all", "Tümünü temizle")).clicked() {
+                        self.clear();
+                    }
+                    if theme::accent_button(
+                        ui,
+                        t("+  Add files", "+  Dosya ekle"),
+                        egui::vec2(132.0, 32.0),
+                    )
+                    .clicked()
+                    {
+                        self.pick_files();
+                    }
+                });
+            });
+        });
     }
 
     fn show_file_list(&mut self, ui: &mut egui::Ui) {
-        card(
-            ui,
-            ui.visuals().widgets.noninteractive.bg_stroke.color,
-            |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new("Dosyalar").strong());
-                ui.add_space(6.0);
+        theme::card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                theme::section(ui, t("Files", "Dosyalar"));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    theme::hint(
+                        ui,
+                        t(
+                            "one target applies to the whole list",
+                            "tek hedef tüm listeye uygulanır",
+                        ),
+                    );
+                });
+            });
+            ui.add_space(8.0);
 
-                let mut remove: Option<usize> = None;
-                for (index, file) in self.files.iter().enumerate() {
-                    egui::Frame::default()
-                        .fill(ui.visuals().faint_bg_color)
-                        .corner_radius(8)
-                        .inner_margin(egui::Margin::symmetric(10, 7))
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width());
-                            ui.horizontal(|ui| {
-                                kind_badge(ui, file.format.kind);
-                                ui.vertical(|ui| {
-                                    ui.label(RichText::new(display_name(&file.path)).strong());
-                                    ui.label(
+            let mut remove: Option<usize> = None;
+            for (index, file) in self.files.iter().enumerate() {
+                egui::Frame::default()
+                    .fill(theme::CARD_ALT)
+                    .stroke(Stroke::new(1.0, theme::BORDER_SOFT))
+                    .corner_radius(10)
+                    .inner_margin(Margin::symmetric(12, 9))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            extension_badge(ui, file.format);
+                            ui.add_space(2.0);
+                            ui.vertical(|ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(display_name(&file.path)).strong(),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(file.path.display().to_string());
+                                ui.add(
+                                    egui::Label::new(
                                         RichText::new(format!(
-                                            "{} · {} · {}",
-                                            file.format.label,
-                                            file.format.id,
-                                            human_size(file.size)
+                                            "{}  ·  {}  ·  {}  ·  {}",
+                                            file.format.kind.label(),
+                                            file.format.display_label(),
+                                            human_size(file.size),
+                                            parent_label(&file.path)
                                         ))
                                         .small()
-                                        .color(MUTED),
-                                    );
-                                });
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    RichText::new("Kaldır").small().color(DANGER),
-                                                )
-                                                .frame(false),
-                                            )
-                                            .on_hover_text("Listeden çıkar")
-                                            .clicked()
-                                        {
-                                            remove = Some(index);
-                                        }
-                                    },
+                                        .color(theme::MUTED),
+                                    )
+                                    .truncate(),
                                 );
                             });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new(t("Remove", "Kaldır"))
+                                                    .small()
+                                                    .color(theme::DANGER),
+                                            )
+                                            .frame(false),
+                                        )
+                                        .on_hover_text(t("Remove from list", "Listeden çıkar"))
+                                        .clicked()
+                                    {
+                                        remove = Some(index);
+                                    }
+                                },
+                            );
                         });
-                    ui.add_space(4.0);
-                }
-                if let Some(index) = remove {
-                    self.files.remove(index);
-                }
-            },
-        );
+                    });
+                ui.add_space(6.0);
+            }
+            if let Some(index) = remove {
+                self.files.remove(index);
+            }
+        });
     }
 
     fn show_options(&mut self, ui: &mut egui::Ui, targets: &[&'static Format]) {
-        card(
-            ui,
-            ui.visuals().widgets.noninteractive.bg_stroke.color,
-            |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new("Dönüşüm").strong());
-                ui.add_space(6.0);
+        theme::card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            theme::section(ui, t("Conversion", "Dönüşüm"));
+            ui.add_space(8.0);
 
+            ui.horizontal(|ui| {
+                ui.label(t("Target format", "Hedef biçim"));
+                let selected = self
+                    .target
+                    .as_deref()
+                    .map(target_label)
+                    .unwrap_or_else(|| "—".to_string());
+                egui::ComboBox::from_id_salt("hedef-bicim")
+                    .selected_text(selected)
+                    .width(216.0)
+                    .show_ui(ui, |ui| {
+                        for target in targets {
+                            ui.selectable_value(
+                                &mut self.target,
+                                Some(target.id.to_string()),
+                                target_label(target.id),
+                            );
+                        }
+                    });
+                if !targets.is_empty() && self.kind_count() > 1 {
+                    theme::hint(
+                        ui,
+                        t(
+                            "only formats every file supports",
+                            "yalnızca tüm dosyalara uyan biçimler",
+                        ),
+                    );
+                }
+            });
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label(t("Output folder", "Çıktı dizini"));
+                let text = self
+                    .output_dir
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| t("Next to the source", "Dosyanın yanına").to_string());
+                ui.add(egui::Label::new(RichText::new(text).small().color(theme::TEXT)).truncate());
+                if ui.button(t("Choose…", "Seç…")).clicked() {
+                    if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                        self.output_dir = Some(dir);
+                    }
+                }
+                if self.output_dir.is_some() && ui.small_button(t("Reset", "Sıfırla")).clicked() {
+                    self.output_dir = None;
+                }
+            });
+
+            if self.has_kind(MediaKind::Image)
+                || self.has_kind(MediaKind::Audio)
+                || self.has_kind(MediaKind::Video)
+            {
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(8.0);
+                theme::hint(ui, t("Options", "Seçenekler"));
+            }
+            if self.has_kind(MediaKind::Image) {
                 ui.horizontal(|ui| {
-                    ui.label("Hedef biçim:");
-                    let selected = self
-                        .target
-                        .as_deref()
-                        .map(target_text)
-                        .unwrap_or_else(|| "—".to_string());
-                    egui::ComboBox::from_id_salt("hedef-bicim")
-                        .selected_text(selected)
-                        .width(200.0)
-                        .show_ui(ui, |ui| {
-                            for target in targets {
-                                ui.selectable_value(
-                                    &mut self.target,
-                                    Some(target.id.to_string()),
-                                    target_text(target.id),
-                                );
-                            }
-                        });
-                    if !targets.is_empty() && self.kind_count() > 1 {
-                        ui.label(
-                            RichText::new("Yalnızca tüm dosyalara uyan ortak biçimler")
-                                .small()
-                                .color(MUTED),
-                        );
+                    ui.label(t("JPEG quality", "JPEG kalitesi"));
+                    ui.add(egui::Slider::new(&mut self.image_quality, 1..=100));
+                });
+            }
+            if self.has_kind(MediaKind::Audio) || self.has_kind(MediaKind::Video) {
+                ui.horizontal(|ui| {
+                    let mut limited = self.bitrate_kbps.is_some();
+                    if ui
+                        .checkbox(&mut limited, t("Bitrate limit", "Bit hızı sınırı"))
+                        .changed()
+                    {
+                        self.bitrate_kbps = if limited { Some(192) } else { None };
+                    }
+                    if let Some(rate) = self.bitrate_kbps.as_mut() {
+                        ui.add(egui::Slider::new(rate, 32..=20000).suffix(" kbps"));
                     }
                 });
-
-                ui.add_space(4.0);
+            }
+            if self.has_kind(MediaKind::Video) {
                 ui.horizontal(|ui| {
-                    ui.label("Çıktı dizini:");
-                    let text = self
-                        .output_dir
-                        .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| "Dosyanın yanına".to_string());
-                    ui.label(RichText::new(text).monospace());
-                    if ui.button("Seç…").clicked() {
-                        if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                            self.output_dir = Some(dir);
-                        }
-                    }
-                    if self.output_dir.is_some() && ui.small_button("Sıfırla").clicked() {
-                        self.output_dir = None;
-                    }
+                    ui.label(t("Scale", "Ölçek"));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.video_scale).hint_text(t(
+                            "e.g. 1280:-2 (empty = source)",
+                            "örn. 1280:-2 (boş = kaynak)",
+                        )),
+                    );
                 });
+            }
+        });
+    }
 
-                if self.has_kind(MediaKind::Image)
-                    || self.has_kind(MediaKind::Audio)
-                    || self.has_kind(MediaKind::Video)
-                {
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("Seçenekler").small().color(MUTED));
-                }
-                if self.has_kind(MediaKind::Image) {
-                    ui.horizontal(|ui| {
-                        ui.label("JPEG kalitesi:");
-                        ui.add(egui::Slider::new(&mut self.image_quality, 1..=100));
-                    });
-                }
-                if self.has_kind(MediaKind::Audio) || self.has_kind(MediaKind::Video) {
-                    ui.horizontal(|ui| {
-                        let mut limited = self.bitrate_kbps.is_some();
-                        if ui.checkbox(&mut limited, "Bit hızı sınırı").changed() {
-                            self.bitrate_kbps = if limited { Some(192) } else { None };
-                        }
-                        if let Some(rate) = self.bitrate_kbps.as_mut() {
-                            ui.add(egui::Slider::new(rate, 32..=20000).suffix(" kbps"));
-                        }
-                    });
-                }
-                if self.has_kind(MediaKind::Video) {
-                    ui.horizontal(|ui| {
-                        ui.label("Ölçek:");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.video_scale)
-                                .hint_text("örn. 1280:-2 (boş = kaynak)"),
-                        );
-                    });
-                }
-            },
-        );
+    /// Sticky action bar shown below the scrolling content.
+    pub fn show_actions_bar(&mut self, ui: &mut egui::Ui, tools: &[ToolStatus]) -> bool {
+        let targets = self.available_targets(tools);
+        self.sync_target(&targets);
+        self.show_actions(ui, &targets, tools)
     }
 
     fn show_actions(
@@ -380,36 +427,70 @@ impl ConvertView {
     ) -> bool {
         let mut start = false;
         if targets.is_empty() {
-            ui.colored_label(
-                WARNING,
-                "Bu dosyalar için ortak bir hedef biçim yok. Arşiv dosyalarını tek başına \
-                 dönüştürün veya farklı türleri ayrı ayrı ekleyin.",
-            );
-            ui.add_space(6.0);
+            egui::Frame::default()
+                .fill(theme::WARNING.gamma_multiply(0.12))
+                .stroke(Stroke::new(1.0, theme::WARNING.gamma_multiply(0.45)))
+                .corner_radius(10)
+                .inner_margin(Margin::symmetric(14, 10))
+                .show(ui, |ui| {
+                    ui.colored_label(
+                        theme::WARNING,
+                        t(
+                            "No common target format for these files. Convert archives on their own or add files of the same kind together.",
+                            "Bu dosyalar için ortak bir hedef biçim yok. Arşivleri tek başına dönüştürün veya aynı türden dosyaları birlikte ekleyin.",
+                        ),
+                    );
+                });
+            ui.add_space(10.0);
         }
 
         ui.horizontal(|ui| {
             let tool_ready = self.has_required_tool(tools);
             let enabled =
                 !self.files.is_empty() && self.target.is_some() && !targets.is_empty() && tool_ready;
-            let fill = if enabled { SUCCESS } else { MUTED };
-            if ui
-                .add_enabled(
-                    enabled,
-                    egui::Button::new(
-                        RichText::new("Dönüştür").size(16.0).strong().color(Color32::WHITE),
-                    )
-                    .fill(fill)
-                    .min_size(egui::vec2(180.0, 40.0)),
+            let fill = if enabled { theme::ACCENT } else { theme::CARD_ALT };
+            let response = ui.add_enabled(
+                enabled,
+                egui::Button::new(
+                    RichText::new(t("Convert", "Dönüştür"))
+                        .size(16.0)
+                        .strong()
+                        .color(if enabled { theme::WHITE } else { theme::MUTED }),
                 )
-                .clicked()
-            {
+                .fill(fill)
+                .stroke(Stroke::new(
+                    1.0,
+                    if enabled {
+                        theme::ACCENT
+                    } else {
+                        theme::BORDER
+                    },
+                ))
+                .corner_radius(11)
+                .min_size(egui::vec2(190.0, 44.0)),
+            );
+            if response.clicked() {
                 start = true;
+            }
+            ui.add_space(4.0);
+            if enabled {
+                theme::hint(
+                    ui,
+                    format!(
+                        "{} {} -> {}",
+                        self.files.len(),
+                        i18n::files_label(self.files.len()),
+                        self.target.as_deref().map(target_label).unwrap_or_default()
+                    ),
+                );
             }
             if !tool_ready {
                 ui.colored_label(
-                    DANGER,
-                    "Gerekli araç kurulu değil. Ayarlar > Harici araçlar bölümünden kurabilirsiniz.",
+                    theme::DANGER,
+                    t(
+                        "A required tool is missing. Install it from Settings > External tools.",
+                        "Gerekli araç kurulu değil. Ayarlar > Harici araçlar bölümünden kurabilirsiniz.",
+                    ),
                 );
             }
         });
@@ -447,7 +528,8 @@ impl ConvertView {
             "ogg", "opus", "aac", "m4a", "mp4", "mkv", "webm", "avi", "mov", "pdf", "docx", "odt",
             "md", "markdown", "html", "htm", "epub", "txt", "csv", "zip", "tar", "gz", "tgz",
         ];
-        let dialog = rfd::FileDialog::new().add_filter("Desteklenen dosyalar", &extensions);
+        let dialog = rfd::FileDialog::new()
+            .add_filter(t("Supported files", "Desteklenen dosyalar"), &extensions);
         if let Some(paths) = dialog.pick_files() {
             for path in paths {
                 self.add_path(path);
@@ -456,109 +538,27 @@ impl ConvertView {
     }
 }
 
-/// Card container used across the screen for a consistent look.
-fn card(ui: &mut egui::Ui, stroke: Color32, add: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::default()
-        .fill(ui.visuals().faint_bg_color)
-        .stroke(Stroke::new(1.0, stroke))
-        .corner_radius(12)
-        .inner_margin(egui::Margin::same(14))
-        .show(ui, add);
+/// Targets supported by every file and by the installed tools.
+pub fn common_targets(files: &[FileItem], tools: &[ToolStatus]) -> Vec<&'static Format> {
+    let Some(first) = files.first() else {
+        return Vec::new();
+    };
+    let mut targets = registry::targets_for(first.format);
+    targets.retain(|target| {
+        files.iter().all(|file| {
+            registry::is_supported(file.format, target.id)
+                && target_allowed(tools, file.format, target)
+        })
+    });
+    targets
 }
 
-/// Paints a drop/import glyph with primitives.
-///
-/// Drawing the icon instead of using a Unicode symbol keeps it visible on
-/// systems whose fonts lack the emoji/dingbat ranges.
-fn drop_icon(ui: &mut egui::Ui, size: f32) {
-    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
-    let painter = ui.painter();
-    let stroke = Stroke::new(2.0, ACCENT);
-    let center = rect.center();
-    let arrow_top = center.y - size * 0.34;
-    let arrow_tip = center.y + size * 0.20;
-    painter.line_segment(
-        [
-            egui::pos2(center.x, arrow_top),
-            egui::pos2(center.x, arrow_tip),
-        ],
-        stroke,
-    );
-    painter.line_segment(
-        [
-            egui::pos2(center.x, arrow_tip),
-            egui::pos2(center.x - size * 0.16, arrow_tip - size * 0.14),
-        ],
-        stroke,
-    );
-    painter.line_segment(
-        [
-            egui::pos2(center.x, arrow_tip),
-            egui::pos2(center.x + size * 0.16, arrow_tip - size * 0.14),
-        ],
-        stroke,
-    );
-    let tray_y = center.y + size * 0.38;
-    let tray_x = size * 0.30;
-    painter.line_segment(
-        [
-            egui::pos2(center.x - tray_x, tray_y - size * 0.12),
-            egui::pos2(center.x - tray_x, tray_y),
-        ],
-        stroke,
-    );
-    painter.line_segment(
-        [
-            egui::pos2(center.x - tray_x, tray_y),
-            egui::pos2(center.x + tray_x, tray_y),
-        ],
-        stroke,
-    );
-    painter.line_segment(
-        [
-            egui::pos2(center.x + tray_x, tray_y),
-            egui::pos2(center.x + tray_x, tray_y - size * 0.12),
-        ],
-        stroke,
-    );
-}
-
-fn kind_badge(ui: &mut egui::Ui, kind: MediaKind) {
-    egui::Frame::default()
-        .fill(kind_color(kind))
-        .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(7, 2))
-        .show(ui, |ui| {
-            ui.label(
-                RichText::new(kind.label())
-                    .small()
-                    .strong()
-                    .color(Color32::WHITE),
-            );
-        });
-}
-
-pub fn kind_color(kind: MediaKind) -> Color32 {
-    match kind {
-        MediaKind::Image => Color32::from_rgb(64, 150, 205),
-        MediaKind::Audio => Color32::from_rgb(150, 112, 200),
-        MediaKind::Video => Color32::from_rgb(205, 100, 150),
-        MediaKind::Document => Color32::from_rgb(205, 145, 60),
-        MediaKind::Archive => Color32::from_rgb(92, 160, 100),
-    }
-}
-
-fn display_name(path: &std::path::Path) -> String {
-    path.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.display().to_string())
-}
-
-fn target_text(id: &str) -> String {
+/// Human readable label for a target id.
+pub fn target_label(id: &str) -> String {
     if id == registry::EXTRACT {
-        "Arşivi ayıkla".to_string()
+        t("Extract archive", "Arşivi ayıkla").to_string()
     } else if let Some(format) = registry::format_by_id(id) {
-        format!("{} (.{})", format.label, format.id)
+        format!("{} (.{})", format.display_label(), format.id)
     } else {
         id.to_string()
     }
@@ -570,7 +570,8 @@ fn target_allowed(tools: &[ToolStatus], source: &Format, target: &Format) -> boo
     }
     if matches!(source.kind, MediaKind::Audio | MediaKind::Video) {
         // Some distributions ship an FFmpeg build without certain encoders.
-        return crate::converters::av::target_supported(target.id);
+        return tool_available(tools, Tool::Ffmpeg)
+            && crate::converters::av::target_supported(target.id);
     }
     if source.kind != MediaKind::Document {
         return true;
@@ -603,6 +604,139 @@ pub fn human_size(bytes: u64) -> String {
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
+}
+
+fn display_name(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+fn parent_label(path: &std::path::Path) -> String {
+    path.parent()
+        .map(|parent| parent.display().to_string())
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| ".".to_string())
+}
+
+/// Small colored chip showing a supported media kind.
+fn kind_chip(ui: &mut egui::Ui, kind: MediaKind) {
+    let color = kind_color(kind);
+    egui::Frame::default()
+        .fill(color.gamma_multiply(0.12))
+        .stroke(Stroke::new(1.0, color.gamma_multiply(0.35)))
+        .corner_radius(20)
+        .inner_margin(Margin::symmetric(10, 4))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::Vec2::splat(7.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 3.5, color);
+                ui.label(RichText::new(kind.label()).small().color(theme::TEXT));
+            });
+        });
+}
+
+/// Extension badge that reads like a small file icon.
+fn extension_badge(ui: &mut egui::Ui, format: &Format) {
+    let short: String = format
+        .id
+        .to_ascii_uppercase()
+        .replace('.', "")
+        .chars()
+        .take(4)
+        .collect();
+    let color = kind_color(format.kind);
+    let size = egui::vec2(48.0, 40.0);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 9.0, color.gamma_multiply(0.18));
+    painter.rect_stroke(
+        rect,
+        9.0,
+        Stroke::new(1.0, color.gamma_multiply(0.55)),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        short,
+        egui::FontId::proportional(11.0),
+        color,
+    );
+}
+
+pub fn kind_color(kind: MediaKind) -> Color32 {
+    match kind {
+        MediaKind::Image => Color32::from_rgb(88, 166, 255),
+        MediaKind::Audio => Color32::from_rgb(178, 132, 255),
+        MediaKind::Video => Color32::from_rgb(255, 122, 170),
+        MediaKind::Document => Color32::from_rgb(255, 179, 82),
+        MediaKind::Archive => Color32::from_rgb(92, 208, 142),
+    }
+}
+
+/// Paints a drop/import glyph with primitives.
+///
+/// Drawing the icon instead of using a Unicode symbol keeps it visible on
+/// systems whose fonts lack the emoji/dingbat ranges.
+fn drop_icon(ui: &mut egui::Ui, size: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
+    let painter = ui.painter();
+    let center = rect.center();
+    painter.circle_filled(center, size * 0.5, theme::ACCENT_SOFT);
+    painter.circle_stroke(
+        center,
+        size * 0.5,
+        Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.5)),
+    );
+    let stroke = Stroke::new(2.0, theme::ACCENT);
+    let arrow_top = center.y - size * 0.24;
+    let arrow_tip = center.y + size * 0.14;
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_top),
+            egui::pos2(center.x, arrow_tip),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_tip),
+            egui::pos2(center.x - size * 0.11, arrow_tip - size * 0.10),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x, arrow_tip),
+            egui::pos2(center.x + size * 0.11, arrow_tip - size * 0.10),
+        ],
+        stroke,
+    );
+    let tray_y = center.y + size * 0.27;
+    let tray_x = size * 0.20;
+    painter.line_segment(
+        [
+            egui::pos2(center.x - tray_x, tray_y - size * 0.08),
+            egui::pos2(center.x - tray_x, tray_y),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x - tray_x, tray_y),
+            egui::pos2(center.x + tray_x, tray_y),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x + tray_x, tray_y),
+            egui::pos2(center.x + tray_x, tray_y - size * 0.08),
+        ],
+        stroke,
+    );
 }
 
 #[cfg(test)]
@@ -667,6 +801,22 @@ mod tests {
         let targets = view.available_targets(&all_installed());
         assert!(targets.iter().all(|f| f.kind == MediaKind::Archive));
         assert!(targets.iter().any(|f| f.id == "zip"));
+    }
+
+    #[test]
+    fn single_png_offers_all_other_image_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("a.png");
+        image::RgbaImage::new(2, 2).save(&png).unwrap();
+
+        let mut view = ConvertView::new(90, None, None);
+        assert!(view.add_path(png));
+        let targets = view.available_targets(&all_installed());
+        let ids: Vec<&str> = targets.iter().map(|format| format.id).collect();
+        assert_eq!(
+            ids,
+            vec!["jpg", "webp", "bmp", "tiff", "gif", "ico", "zip", "tar.gz"]
+        );
     }
 
     #[test]

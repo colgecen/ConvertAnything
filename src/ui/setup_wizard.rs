@@ -4,10 +4,12 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
 
 use anyhow::Context;
-use egui::{Align2, Color32, RichText};
+use egui::{Align2, RichText};
 
 use crate::core::detector::{self, PackageManager, Tool, ToolStatus};
 use crate::core::installer::{self, InstallReport};
+use crate::i18n::t;
+use crate::ui::theme;
 
 #[derive(Debug, Clone)]
 pub enum WizardAction {
@@ -55,7 +57,11 @@ impl SetupWizard {
         }
         self.installing = true;
         self.message = Some((
-            "Kurulum başlatıldı. Polkit penceresinde parolanızı girebilirsiniz.".to_string(),
+            t(
+                "Installation started. You can enter your password in the polkit window.",
+                "Kurulum başlatıldı. Polkit penceresinde parolanızı girebilirsiniz.",
+            )
+            .to_string(),
             true,
         ));
         let (tx, rx) = mpsc::channel();
@@ -84,12 +90,20 @@ impl SetupWizard {
                 self.install_rx = None;
                 self.installing = false;
                 self.message = Some((
-                    "Kurulum işlemi beklenmedik şekilde durdu.".to_string(),
+                    t(
+                        "The installation stopped unexpectedly.",
+                        "Kurulum işlemi beklenmedik şekilde durdu.",
+                    )
+                    .to_string(),
                     false,
                 ));
                 return Some(WizardAction::Installed {
                     success: false,
-                    summary: "Kurulum işlemi beklenmedik şekilde durdu.".to_string(),
+                    summary: t(
+                        "The installation stopped unexpectedly.",
+                        "Kurulum işlemi beklenmedik şekilde durdu.",
+                    )
+                    .to_string(),
                 });
             }
         };
@@ -134,33 +148,35 @@ impl SetupWizard {
         let mut action = None;
         let mut window_open = true;
 
-        egui::Window::new("İlk kurulum")
+        egui::Window::new(t("First-run setup", "İlk kurulum"))
             .open(&mut window_open)
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.set_max_width(520.0);
-                ui.heading("Dönüştür'e hoş geldiniz");
-                ui.label(
-                    "Dönüşüm motorları uygulamaya gömülü değildir. Eksik araçları bir kez \
-                     kurmanız yeterlidir; kurulum yalnızca sabit paket adlarıyla ve pkexec \
-                     üzerinden yapılır.",
-                );
+                ui.set_max_width(540.0);
+                ui.heading(t(
+                    "Welcome to ConvertAnything",
+                    "ConvertAnything'e hoş geldiniz",
+                ));
+                ui.label(t(
+                    "Conversion engines are not bundled. Installing the missing tools once is enough; setup uses fixed package names through pkexec.",
+                    "Dönüşüm motorları uygulamaya gömülü değildir. Eksik araçları bir kez kurmanız yeterlidir; kurulum yalnızca sabit paket adlarıyla ve pkexec üzerinden yapılır.",
+                ));
                 ui.add_space(8.0);
                 ui.separator();
 
                 for status in tools {
                     ui.horizontal(|ui| {
                         if status.available() {
+                            theme::dot(ui, theme::SUCCESS);
                             ui.label(
-                                RichText::new("kurulu")
+                                RichText::new(t("installed", "kurulu"))
                                     .small()
                                     .strong()
-                                    .color(Color32::from_rgb(80, 160, 90)),
+                                    .color(theme::SUCCESS),
                             );
                             ui.label(status.tool.display_name());
-                            ui.label(RichText::new("kurulu").small().color(Color32::GRAY));
                         } else {
                             let selected = self.selected.contains(&status.tool);
                             let mut checked = selected;
@@ -168,19 +184,21 @@ impl SetupWizard {
                                 if checked {
                                     self.selected.push(status.tool);
                                 } else {
-                                    self.selected.retain(|t| *t != status.tool);
+                                    self.selected.retain(|tool| *tool != status.tool);
                                 }
                             }
                             ui.label(status.tool.display_name());
                             if status.tool.is_critical() {
                                 ui.label(
-                                    RichText::new("gerekli")
+                                    RichText::new(t("required", "gerekli"))
                                         .small()
-                                        .color(Color32::from_rgb(200, 90, 60)),
+                                        .color(theme::DANGER),
                                 );
                             } else {
                                 ui.label(
-                                    RichText::new("isteğe bağlı").small().color(Color32::GRAY),
+                                    RichText::new(t("optional", "isteğe bağlı"))
+                                        .small()
+                                        .color(theme::MUTED),
                                 );
                             }
                         }
@@ -192,26 +210,34 @@ impl SetupWizard {
 
                 if missing.is_empty() {
                     ui.colored_label(
-                        Color32::from_rgb(80, 160, 90),
-                        "Tüm dönüşüm araçları hazır.",
+                        theme::SUCCESS,
+                        t(
+                            "All conversion tools are ready.",
+                            "Tüm dönüşüm araçları hazır.",
+                        ),
                     );
                 } else {
                     match manager {
                         Some(manager) => {
-                            ui.label(
-                                RichText::new(format!(
-                                    "Kurulum için {} kullanılacak; polkit sizden yetki isteyecek.",
-                                    manager.display_name()
-                                ))
-                                .small()
-                                .color(Color32::GRAY),
+                            theme::hint(
+                                ui,
+                                format!(
+                                    "{} {}",
+                                    manager.display_name(),
+                                    t(
+                                        "will be used; polkit will ask for permission.",
+                                        "kullanılacak; polkit sizden yetki isteyecek."
+                                    )
+                                ),
                             );
                         }
                         None => {
                             ui.colored_label(
-                                Color32::from_rgb(200, 90, 60),
-                                "Paket yöneticisi algılanamadı. Araçları dağıtımınızın \
-                                 paket yöneticisiyle elle kurabilirsiniz.",
+                                theme::DANGER,
+                                t(
+                                    "No package manager detected. Install the tools manually with your distribution's package manager.",
+                                    "Paket yöneticisi algılanamadı. Araçları dağıtımınızın paket yöneticisiyle elle kurabilirsiniz.",
+                                ),
                             );
                         }
                     }
@@ -219,11 +245,7 @@ impl SetupWizard {
 
                 if let Some((text, success)) = &self.message {
                     ui.add_space(4.0);
-                    let color = if *success {
-                        Color32::from_rgb(80, 160, 90)
-                    } else {
-                        Color32::from_rgb(200, 90, 60)
-                    };
+                    let color = if *success { theme::SUCCESS } else { theme::DANGER };
                     ui.colored_label(color, text);
                 }
 
@@ -231,19 +253,25 @@ impl SetupWizard {
                 ui.horizontal(|ui| {
                     if self.installing {
                         ui.spinner();
-                        ui.label("Kurulum sürüyor…");
+                        ui.label(t("Installing…", "Kurulum sürüyor…"));
                     } else {
                         let can_install = manager.is_some() && !self.selected.is_empty();
                         if ui
-                            .add_enabled(can_install, egui::Button::new("Seçilenleri kur"))
+                            .add_enabled(
+                                can_install,
+                                egui::Button::new(t(
+                                    "Install selected",
+                                    "Seçilenleri kur",
+                                )),
+                            )
                             .clicked()
                         {
                             action = Some(WizardAction::StartInstall(self.selected.clone()));
                         }
-                        if ui.button("Şimdilik atla").clicked() {
+                        if ui.button(t("Skip for now", "Şimdilik atla")).clicked() {
                             action = Some(WizardAction::Skip);
                         }
-                        if missing.is_empty() && ui.button("Başla").clicked() {
+                        if missing.is_empty() && ui.button(t("Start", "Başla")).clicked() {
                             action = Some(WizardAction::Skip);
                         }
                     }

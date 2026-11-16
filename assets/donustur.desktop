@@ -1,14 +1,15 @@
 [Desktop Entry]
-Name=Dönüştür
-Name[en]=Donustur
-GenericName=Dosya Dönüştürücü
-GenericName[en]=File Converter
-Comment=Görsel, ses, video, belge ve arşiv dönüştürücü
-Comment[en]=Image, audio, video, document and archive converter
-Exec=donustur
+Name=ConvertAnything
+Name[tr]=Dönüştür
+GenericName=File Converter
+GenericName[tr]=Dosya Dönüştürücü
+Comment=Image, audio, video, document and archive converter
+Comment[tr]=Görsel, ses, video, belge ve arşiv dönüştürücü
+Exec=donustur %F
+MimeType=image/jpeg;image/png;image/webp;image/bmp;image/tiff;image/gif;image/x-icon;audio/mpeg;audio/x-wav;audio/flac;audio/ogg;audio/aac;audio/mp4;video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;application/pdf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;text/markdown;text/html;application/epub+zip;text/plain;text/csv;application/zip;application/x-compressed-tar;application/x-tar;
 Icon=donustur
 Terminal=false
 Type=Application
 Categories=Utility;Office;Graphics;AudioVideo;
-Keywords=convert;donustur;image;video;audio;document;arsiv;
+Keywords=convert;donustur;image;video;audio;document;archive;
 StartupWMClass=donustur
