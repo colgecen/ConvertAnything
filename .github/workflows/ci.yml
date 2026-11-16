@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
   pull_request:
 
 permissions:
@@ -13,41 +12,41 @@ env:
 
 jobs:
   test:
-    name: Biçim, lint ve testler
-    runs-on: ubuntu-latest
+    name: Format, lint and tests
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rust araç zinciri
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
-      - name: Sistem bağımlılıkları
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwayland-dev libxkbcommon-dev libx11-dev libxi-dev \
             libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev
 
-      - name: Rust önbelleği
+      - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
 
-      - name: Biçim denetimi
+      - name: Check formatting
         run: cargo fmt --all --check
 
-      - name: Clippy
+      - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Testler
+      - name: Run tests
         run: cargo test --all-targets
 
-      - name: Release derlemesi
+      - name: Build release binary
         run: cargo build --release
 
   audit:
-    name: Bağımlılık güvenlik denetimi
-    runs-on: ubuntu-latest
+    name: Dependency audit
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2

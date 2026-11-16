@@ -218,7 +218,7 @@ pub struct Installed {
 pub fn install_to(data_home: &Path, exec: &Path) -> Result<Installed> {
     let applications = data_home.join("applications");
     let servicemenus = data_home.join("kio/servicemenus");
-    let icons = data_home.join("icons/hicolor/256x256/apps");
+    let icons = data_home.join("icons/hicolor/512x512/apps");
     for dir in [&applications, &servicemenus, &icons] {
         paths::ensure_dir(dir)
             .with_context(|| format!("dizin oluşturulamadı: {}", dir.display()))?;
@@ -228,8 +228,10 @@ pub fn install_to(data_home: &Path, exec: &Path) -> Result<Installed> {
     let icon = icons.join("donustur.png");
     std::fs::write(&desktop, desktop_entry(exec))
         .with_context(|| format!("masaüstü dosyası yazılamadı: {}", desktop.display()))?;
-    std::fs::write(&icon, include_bytes!("../assets/donustur.png"))
+    std::fs::write(&icon, include_bytes!("../assets/icon.png"))
         .with_context(|| format!("simge yazılamadı: {}", icon.display()))?;
+    // Remove the 256 px icon written by older versions.
+    let _ = std::fs::remove_file(data_home.join("icons/hicolor/256x256/apps/donustur.png"));
 
     let menus = service_menus(exec);
     let expected: Vec<&str> = menus.iter().map(|(name, _)| name.as_str()).collect();
@@ -322,7 +324,7 @@ pub fn ensure_installed_for(exec: &Path) -> Result<Installed> {
                 .into_iter()
                 .map(|(name, _)| servicemenus.join(name))
                 .collect(),
-            icon: data.join("icons/hicolor/256x256/apps/donustur.png"),
+            icon: data.join("icons/hicolor/512x512/apps/donustur.png"),
         });
     }
     install_to(&data, exec)

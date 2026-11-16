@@ -405,7 +405,7 @@ fn print_help() {
 
 /// Decodes the bundled PNG icon for the window manager / task bar.
 fn window_icon() -> Option<egui::IconData> {
-    const ICON: &[u8] = include_bytes!("../assets/donustur.png");
+    const ICON: &[u8] = include_bytes!("../assets/icon.png");
     let image = image::load_from_memory(ICON).ok()?.to_rgba8();
     let (width, height) = image.dimensions();
     Some(egui::IconData {
@@ -429,8 +429,8 @@ mod tests {
     #[test]
     fn bundled_icon_decodes() {
         let icon = super::window_icon().expect("gömülü ikon çözümlenemedi");
-        assert_eq!(icon.width, 256);
-        assert_eq!(icon.height, 256);
+        assert_eq!(icon.width, 512);
+        assert_eq!(icon.height, 512);
         assert_eq!(
             icon.rgba.len() as u32,
             icon.width * icon.height * 4,

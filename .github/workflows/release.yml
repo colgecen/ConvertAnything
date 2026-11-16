@@ -3,8 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -14,46 +13,116 @@ env:
   APPIMAGE_EXTRACT_AND_RUN: "1"
 
 jobs:
-  appimage:
-    name: AppImage (x86_64)
-    runs-on: ubuntu-22.04
+  build:
+    name: Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rust araç zinciri
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Sistem bağımlılıkları
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            curl file libwayland-dev libxkbcommon-dev libx11-dev libxi-dev \
+            curl file rpm libwayland-dev libxkbcommon-dev libx11-dev libxi-dev \
             libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev
 
-      - name: Rust önbelleği
+      - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
 
-      - name: Testler
+      - name: Run tests
         run: cargo test --all-targets
 
-      - name: AppImage üret
+      - name: Build assets
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            ./scripts/package-appimage.sh "${GITHUB_REF_NAME#v}"
-          else
-            ./scripts/package-appimage.sh
-          fi
+          export VERSION="${VERSION#v}"
+          ./donustur --build linux appimage "${{ matrix.arch }}"
+          ./donustur --build linux targz "${{ matrix.arch }}"
+          ./donustur --build linux rpm "${{ matrix.arch }}"
 
-      - name: Artifact yükle
+      - name: Smoke test AppImage and tarball
+        env:
+          VERSION: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          export VERSION="${VERSION#v}"
+          ./build/dist/donustur-"$VERSION"-linux-"$ARCH".AppImage --version
+          mkdir -p build/smoke
+          tar -xzf build/dist/donustur-"$VERSION"-linux-"$ARCH".tar.gz -C build/smoke
+          ./build/smoke/donustur-"$VERSION"-linux-"$ARCH"/donustur --version
+
+      - name: Upload assets
         uses: actions/upload-artifact@v4
         with:
-          name: Donustur-AppImage
-          path: dist/*.AppImage
+          name: donustur-${{ matrix.arch }}
+          path: |
+            build/dist/*.AppImage
+            build/dist/*.tar.gz
+            build/dist/*.rpm
           if-no-files-found: error
 
-      - name: Sürüm yayınla
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  source:
+    name: Source archive
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
         with:
-          files: dist/*.AppImage
-          generate_release_notes: true
+          fetch-depth: 1
+      - name: Create source archive
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          export VERSION="${VERSION#v}"
+          ./donustur --build linux source
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: donustur-source
+          path: build/dist/*-source.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [build, source]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: donustur-*
+          path: build/dist
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd build/dist
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=()
+          if [[ "$TAG" == *-rc.* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" build/dist/* \
+            --title "$TAG" \
+            --generate-notes \
+            "${prerelease[@]}"

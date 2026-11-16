@@ -186,8 +186,10 @@ pub fn uninstall() -> Result<()> {
 
     let applications = paths::data_home().join("applications/donustur.desktop");
     let _ = std::fs::remove_file(applications);
-    let icon = paths::data_home().join("icons/hicolor/256x256/apps/donustur.png");
+    let icon = paths::data_home().join("icons/hicolor/512x512/apps/donustur.png");
     let _ = std::fs::remove_file(icon);
+    let _ =
+        std::fs::remove_file(paths::data_home().join("icons/hicolor/256x256/apps/donustur.png"));
     let servicemenus = paths::data_home().join("kio/servicemenus");
     if let Ok(entries) = std::fs::read_dir(&servicemenus) {
         for entry in entries.flatten() {

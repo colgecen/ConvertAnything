@@ -1,5 +1,7 @@
 /target
 /AppDir
 /.tools
+/build
 /*.AppImage
 /dist
+__pycache__/
