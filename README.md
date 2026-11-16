@@ -34,8 +34,11 @@ kurar (bir kez, yalnızca sabit paket adlarıyla). Sonrasında uygulama araçlar
 `std::process::Command` ile **kabuk kullanmadan** çağırır.
 
 ## Kurulum
-AppImage'ı indirdikten sonra tek komutla kullanıcı hesabına kur:
+AppImage'ı indirip çift tıklaman (veya `./Donustur-*.AppImage` çalıştırman) yeterli.
+İlk açılışta uygulama kendini `~/.local/bin/Donustur.AppImage` konumuna kurar,
+sağ tık menülerini ekler ve oturum açılışında başlatmayı açar.
 
+Elle kurmak veya güncellemek istersen:
 ```bash
 chmod +x Donustur-*.AppImage
 ./Donustur-*.AppImage --install

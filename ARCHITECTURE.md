@@ -78,11 +78,12 @@ scripts/               # AppImage paketleme betiği
 5. Seçim, `donustur --convert %F --to FORMAT` çağırır. Bu yol **pencere açmaz**: dönüşüm arka planda yapılır, sonuçta masaüstü bildirimi gönderilir.
 
 ### Kurulum ve oturum açılışı
-1. `--install`, çalışan AppImage'ı `~/.local/bin/Donustur.AppImage` konumuna atomik olarak kopyalar (0755).
-2. Masaüstü girdisi, simge ve servis menüleri bu kalıcı kopyaya bağlanır.
-3. `~/.config/autostart/donustur.desktop` yazılarak oturum açılışında başlatma etkinleştirilir.
-4. Ayarlar → Sistem entegrasyonu aynı işlemleri ve otomatik başlatma anahtarını sunar.
-5. `--uninstall` kopyayı, menüleri ve otomatik başlatma kaydını siler.
+1. İndirilen AppImage ilk kez açıldığında `app.rs` otomatik kurulumu tetikler; kullanıcıdan komut istemez.
+2. `--install`, çalışan AppImage'ı `~/.local/bin/Donustur.AppImage` konumuna atomik olarak kopyalar (0755).
+3. Masaüstü girdisi, simge ve servis menüleri bu kalıcı kopyaya bağlanır.
+4. `~/.config/autostart/donustur.desktop` yazılarak oturum açılışında başlatma etkinleştirilir.
+5. Ayarlar → Sistem entegrasyonu aynı işlemleri ve otomatik başlatma anahtarını sunar.
+6. `--uninstall` kopyayı, menüleri ve otomatik başlatma kaydını siler.
 
 ### Dil
 - `config.toml` içindeki `language` değeri `auto`, `tr` veya `en` olabilir.

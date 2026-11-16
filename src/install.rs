@@ -152,6 +152,16 @@ pub fn install_at(
     })
 }
 
+/// True when the running AppImage is not the installed copy yet.
+pub fn should_install(running: Option<&Path>, installed: Option<&Path>) -> bool {
+    match running {
+        Some(running) => installed
+            .map(|installed| installed != running)
+            .unwrap_or(true),
+        None => false,
+    }
+}
+
 /// Installs the running app for the current user.
 pub fn install_app(enable_autostart: bool) -> Result<InstallReport> {
     let source = integration::executable_path();
@@ -201,6 +211,16 @@ mod tests {
             "Donustur.AppImage"
         );
         assert_eq!(installed_name(Path::new("donustur")), "donustur");
+    }
+
+    #[test]
+    fn first_launch_from_download_needs_install() {
+        let installed = Path::new("/home/user/.local/bin/Donustur.AppImage");
+        let download = Path::new("/home/user/Downloads/Donustur.AppImage");
+        assert!(should_install(Some(download), None));
+        assert!(should_install(Some(download), Some(installed)));
+        assert!(!should_install(Some(installed), Some(installed)));
+        assert!(!should_install(None, Some(installed)));
     }
 
     #[test]

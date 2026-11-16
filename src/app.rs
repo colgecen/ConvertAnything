@@ -64,9 +64,46 @@ impl DonusturApp {
             let _ = config.save();
         }
 
-        // Register the file-manager integration (idempotent, user data dir only).
-        // When the app was installed to ~/.local/bin, keep the menus pointing
-        // there even if this session was started from another copy.
+        // Running a downloaded AppImage is enough: copy it to the stable
+        // location, register menus and enable login autostart automatically.
+        let running_appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+        let installed = install::installed_executable();
+        let mut startup_notice: Option<(String, bool)> = None;
+        if install::should_install(running_appimage.as_deref(), installed.as_deref()) {
+            let enable_autostart = installed.is_none() || install::autostart_enabled();
+            match install::install_app(enable_autostart) {
+                Ok(report) => {
+                    startup_notice = Some((
+                        format!(
+                            "{} {} · {}",
+                            t("Installed for this user:", "Bu kullanıcı için kuruldu:"),
+                            report.executable.display(),
+                            t(
+                                "it will start with your session",
+                                "oturum açılışında başlayacak"
+                            )
+                        ),
+                        false,
+                    ));
+                }
+                Err(error) => {
+                    tracing::warn!("otomatik kurulum başarısız: {error:#}");
+                    startup_notice = Some((
+                        format!(
+                            "{} {error:#}",
+                            t(
+                                "Automatic installation failed:",
+                                "Otomatik kurulum başarısız:"
+                            )
+                        ),
+                        true,
+                    ));
+                }
+            }
+        }
+
+        // Register/refresh the file-manager integration (idempotent, user data
+        // dir only). Prefer the installed copy when it exists.
         let menu_exec =
             install::installed_executable().unwrap_or_else(integration::executable_path);
         if let Err(error) = integration::ensure_installed_for(&menu_exec) {
@@ -93,7 +130,7 @@ impl DonusturApp {
         let wizard = SetupWizard::new(&config, &tools);
         let settings = SettingsView::new(&config);
 
-        Self {
+        let mut app = Self {
             config,
             tools,
             manager,
@@ -104,7 +141,11 @@ impl DonusturApp {
             wizard,
             settings,
             toast: None,
+        };
+        if let Some((text, error)) = startup_notice {
+            app.notify(text, error);
         }
+        app
     }
 
     fn notify(&mut self, text: impl Into<String>, error: bool) {

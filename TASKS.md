@@ -59,6 +59,7 @@
 - [x] Masaüstü girdisi, simge ve sağ tık menülerini kurulu kopyaya yönlendirir
 - [x] `~/.config/autostart/donustur.desktop` ile oturum açılışında başlatma
 - [x] Ayarlar → Sistem entegrasyonu: kurulum ve otomatik başlatma anahtarı
+- [x] İndirilen AppImage ilk açılışta kendini otomatik kurar ve oturum açılışına ekler
 - [x] `--uninstall`: uygulama, menüler ve otomatik başlatma kaydını temizler
 
 ## Güvenlik denetimi (her milestone sonu)
@@ -77,7 +78,7 @@
 - M7: Tek ekranda karışık dosyalar; hedef listesi tüm dosyaların desteklediği biçimlerin kesişimidir. Arşive paketleme/ayıklama medya araçları gerektirmez.
 - M8: Sağ tık menüleri MIME başına üretilir ve 0755 izniyle yazılır (KIO aksi hâlde reddeder). `--to` verilen çağrılar pencere açmadan çalışır; bildirim `notify-send` ile en iyi çaba esaslıdır.
 - M9: Kurulum `~/.local/bin/Donustur.AppImage` hedefini kullanır; menüler ve otomatik başlatma bu kalıcı yola bağlanır. Kurulu kopya varsa uygulama menüleri tekrar geçici yola çevirmez.
-- Test: 107 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
+- Test: 108 birim/uçtan uca test (1 LibreOffice e2e isteğe bağlı); `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check` temiz.
 
 ## V2 fikirleri (şimdilik yapma)
 - Toplu önizleme, format öneri motoru, sağ tık menüsü entegrasyonu (Nautilus/Dolphin), arşiv desteği genişletme
